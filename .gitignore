@@ -1,0 +1,28 @@
+bin/
+obj/
+artifacts/
+TestResults/
+.coverage/
+coverage/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Unity generated/local state
+Library/
+Temp/
+Logs/
+UserSettings/
+MemoryCaptures/
+Build/
+Builds/
+
+# macOS/local files
+.DS_Store

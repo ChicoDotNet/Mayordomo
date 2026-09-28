@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace Mayordomo.Core.Tests;
 
 public sealed class GameProfileTests

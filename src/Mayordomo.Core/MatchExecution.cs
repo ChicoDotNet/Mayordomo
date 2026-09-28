@@ -86,11 +86,13 @@ public sealed class MatchState
   private MatchState(
     MatchId matchId,
     Revision revision,
-    IEnumerable<ParticipantId> participants)
+    IEnumerable<ParticipantId> participants,
+    TurnState? turn)
   {
     MatchId = matchId;
     Revision = revision;
     Participants = new ReadOnlyCollection<ParticipantId>([.. participants]);
+    Turn = turn;
   }
 
   public MatchId MatchId { get; }
@@ -99,9 +101,11 @@ public sealed class MatchState
 
   public IReadOnlyList<ParticipantId> Participants { get; }
 
+  public TurnState? Turn { get; }
+
   public static MatchState Create(MatchId matchId)
   {
-    return new MatchState(matchId, Revision.Zero, []);
+    return new MatchState(matchId, Revision.Zero, [], null);
   }
 
   internal MatchState AddParticipant(
@@ -117,7 +121,32 @@ public sealed class MatchState
     return new MatchState(
       MatchId,
       revision,
-      Participants.Append(participantId));
+      Participants.Append(participantId),
+      Turn);
+  }
+
+  internal MatchState StartTurn(
+    ParticipantId participantId,
+    PhaseId phaseId,
+    Revision revision)
+  {
+    if (!Participants.Contains(participantId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' is not part of match '{MatchId}'.");
+    }
+
+    if (Turn is not null)
+    {
+      throw new InvalidOperationException(
+        $"Match '{MatchId}' already has an active turn.");
+    }
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      new TurnState(participantId, phaseId));
   }
 }
 
@@ -198,18 +227,10 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
-    if (state.MatchId != command.MatchId)
-    {
-      throw new InvalidOperationException(
-        $"Command targets match '{command.MatchId}', but state belongs to '{state.MatchId}'.");
-    }
-
-    if (state.Revision != command.ExpectedRevision)
-    {
-      throw new RevisionConflictException(
-        command.ExpectedRevision,
-        state.Revision);
-    }
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
 
     var nextRevision = state.Revision.Next();
 
@@ -227,6 +248,80 @@ public static class MatchEngine
     return new MatchTransition(
       reduced,
       new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    StartTurnCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new TurnStartedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        command.PhaseId)
+    ];
+
+    var reduced = Reduce(state, events);
+
+    return new MatchTransition(
+      reduced,
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static LegalActionSet QueryLegalActions(
+    MatchState state,
+    ParticipantId actor,
+    ILegalActionRules rules)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(rules);
+
+    if (!state.Participants.Contains(actor))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{actor}' is not part of match '{state.MatchId}'.");
+    }
+
+    var actions = rules.Query(state, actor)
+      ?? throw new InvalidOperationException(
+        "Legal-action rules returned null.");
+
+    return new LegalActionSet(
+      actor,
+      state.Revision,
+      actions);
+  }
+
+  private static void ValidateCommandTarget(
+    MatchState state,
+    MatchId matchId,
+    Revision expectedRevision)
+  {
+    if (state.MatchId != matchId)
+    {
+      throw new InvalidOperationException(
+        $"Command targets match '{matchId}', but state belongs to '{state.MatchId}'.");
+    }
+
+    if (state.Revision != expectedRevision)
+    {
+      throw new RevisionConflictException(
+        expectedRevision,
+        state.Revision);
+    }
   }
 
   public static MatchState Reduce(
@@ -259,6 +354,11 @@ public static class MatchEngine
       {
         ParticipantJoinedEvent joined =>
           current.AddParticipant(joined.ParticipantId, joined.Revision),
+        TurnStartedEvent started =>
+          current.StartTurn(
+            started.ParticipantId,
+            started.PhaseId,
+            started.Revision),
         _ => throw new InvalidOperationException(
           $"Unsupported event type '{domainEvent.GetType().Name}'.")
       };

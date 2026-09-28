@@ -87,12 +87,14 @@ public sealed class MatchState
     MatchId matchId,
     Revision revision,
     IEnumerable<ParticipantId> participants,
-    TurnState? turn)
+    TurnState? turn,
+    RandomState randomState)
   {
     MatchId = matchId;
     Revision = revision;
     Participants = new ReadOnlyCollection<ParticipantId>([.. participants]);
     Turn = turn;
+    RandomState = randomState;
   }
 
   public MatchId MatchId { get; }
@@ -103,9 +105,23 @@ public sealed class MatchState
 
   public TurnState? Turn { get; }
 
+  public RandomState RandomState { get; }
+
   public static MatchState Create(MatchId matchId)
   {
-    return new MatchState(matchId, Revision.Zero, [], null);
+    return Create(matchId, randomSeed: 0UL);
+  }
+
+  public static MatchState Create(
+    MatchId matchId,
+    ulong randomSeed)
+  {
+    return new MatchState(
+      matchId,
+      Revision.Zero,
+      [],
+      null,
+      new RandomState(randomSeed));
   }
 
   internal MatchState AddParticipant(
@@ -122,7 +138,8 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants.Append(participantId),
-      Turn);
+      Turn,
+      RandomState);
   }
 
   internal MatchState StartTurn(
@@ -146,7 +163,59 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants,
-      new TurnState(participantId, phaseId));
+      new TurnState(participantId, phaseId),
+      RandomState);
+  }
+
+  internal MatchState EndTurn(
+    ParticipantId participantId,
+    Revision revision)
+  {
+    if (Turn is null)
+    {
+      throw new InvalidOperationException(
+        $"Match '{MatchId}' does not have an active turn.");
+    }
+
+    if (Turn.ParticipantId != participantId)
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' cannot end the active turn owned by '{Turn.ParticipantId}'.");
+    }
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      null,
+      RandomState);
+  }
+
+  internal MatchState ApplyRandom(
+    int minInclusive,
+    int maxExclusive,
+    int value,
+    RandomState randomStateAfter,
+    Revision revision)
+  {
+    var random = DeterministicRandom.Restore(RandomState);
+    var expectedValue = random.NextInt32(
+      minInclusive,
+      maxExclusive);
+
+    if (expectedValue != value ||
+        random.State != randomStateAfter)
+    {
+      throw new InvalidOperationException(
+        "Random event does not match the deterministic random state.");
+    }
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      Turn,
+      randomStateAfter);
   }
 }
 
@@ -281,6 +350,94 @@ public static class MatchEngine
       new ReadOnlyCollection<MatchEvent>(events));
   }
 
+  public static MatchTransition Execute(
+    MatchState state,
+    GenerateRandomIntCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var random = DeterministicRandom.Restore(
+      state.RandomState);
+    var value = random.NextInt32(
+      command.MinInclusive,
+      command.MaxExclusive);
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new RandomIntGeneratedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.MinInclusive,
+        command.MaxExclusive,
+        value,
+        random.State)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    EndTurnCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var activeTurn = state.Turn
+      ?? throw new InvalidOperationException(
+        $"Match '{state.MatchId}' does not have an active turn.");
+
+    if (activeTurn.ParticipantId != command.ParticipantId)
+    {
+      throw new InvalidOperationException(
+        $"Participant '{command.ParticipantId}' cannot end the active turn owned by '{activeTurn.ParticipantId}'.");
+    }
+
+    var currentIndex = FindParticipantIndex(
+      state.Participants,
+      command.ParticipantId);
+
+    var nextParticipant = state.Participants[
+      (currentIndex + 1) % state.Participants.Count];
+
+    var endedRevision = state.Revision.Next();
+    var startedRevision = endedRevision.Next();
+
+    MatchEvent[] events =
+    [
+      new TurnEndedEvent(
+        command.CommandId,
+        command.MatchId,
+        endedRevision,
+        command.ParticipantId),
+      new TurnStartedEvent(
+        command.CommandId,
+        command.MatchId,
+        startedRevision,
+        nextParticipant,
+        command.NextPhaseId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
   public static LegalActionSet QueryLegalActions(
     MatchState state,
     ParticipantId actor,
@@ -303,6 +460,22 @@ public static class MatchEngine
       actor,
       state.Revision,
       actions);
+  }
+
+  private static int FindParticipantIndex(
+    IReadOnlyList<ParticipantId> participants,
+    ParticipantId participantId)
+  {
+    for (var index = 0; index < participants.Count; index++)
+    {
+      if (participants[index] == participantId)
+      {
+        return index;
+      }
+    }
+
+    throw new InvalidOperationException(
+      $"Participant '{participantId}' is not part of the match.");
   }
 
   private static void ValidateCommandTarget(
@@ -359,6 +532,17 @@ public static class MatchEngine
             started.ParticipantId,
             started.PhaseId,
             started.Revision),
+        TurnEndedEvent ended =>
+          current.EndTurn(
+            ended.ParticipantId,
+            ended.Revision),
+        RandomIntGeneratedEvent generated =>
+          current.ApplyRandom(
+            generated.MinInclusive,
+            generated.MaxExclusive,
+            generated.Value,
+            generated.RandomStateAfter,
+            generated.Revision),
         _ => throw new InvalidOperationException(
           $"Unsupported event type '{domainEvent.GetType().Name}'.")
       };

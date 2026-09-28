@@ -2,7 +2,7 @@
 
 Thank you for contributing.
 
-This repository is maintained as a future public MIT-licensed engine repository even while it may remain private during incubation. Every contribution must therefore be safe to publish together with its Git history.
+Mayordomo Engine is MIT-licensed open-source software from inception. Repository visibility may remain private briefly during bootstrap, but every contribution must be safe for public distribution together with its Git history.
 
 ## Read first
 
@@ -32,7 +32,7 @@ Code, identifiers, tests, schemas, ADRs, and canonical engineering documentation
 - Authoritative behavior must be deterministic and headless-testable.
 - UI, transport, cloud, and persistence technologies must not leak into engine rules.
 - Rust/.NET experiments prefer FerrumWeave only after a justified boundary exists.
-- Branded Web/Unity/Avalonia clients and Mayordomo Studio belong in the private product repository.
+- Branded Web/Unity/Avalonia clients and Mayordomo Studio belong in the private product repository.\n- Engine Core changes must respect the documented size/dependency budgets; benchmark-sensitive changes must include proportional performance evidence.
 
 ## TDD
 

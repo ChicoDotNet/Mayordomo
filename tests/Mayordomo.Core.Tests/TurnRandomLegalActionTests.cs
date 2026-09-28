@@ -114,6 +114,21 @@ public sealed class TurnRandomLegalActionTests
     Assert.All(firstSequence, value => Assert.InRange(value, 1, 6));
   }
 
+  [Fact]
+  public void Seeded_random_sequence_is_a_replay_compatibility_contract()
+  {
+    var random = DeterministicRandom.Create(0x5EEDUL);
+
+    var actual = Enumerable
+      .Range(0, 8)
+      .Select(_ => random.NextInt32(1, 7))
+      .ToArray();
+
+    Assert.Equal(
+      [5, 6, 6, 2, 4, 3, 5, 4],
+      actual);
+  }
+
   private static MatchState CreateStartedTwoParticipantMatch()
   {
     var initial = MatchState.Create(MatchId.Create("match-001"));

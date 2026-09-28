@@ -40,19 +40,27 @@ const required = [
   "GOVERNANCE.md",
   "DCO.md",
   "CHANGELOG.md",
+  "CITATION.cff",
   "AGENTS.md",
   "docs/DEVELOPMENT.md",
   "docs/RELEASING.md",
   "docs/architecture/clean-room-board-game-engine.md",
   "docs/architecture/0001-public-engine-private-game-boundary.md",
+  "docs/architecture/0002-performance-and-footprint-budgets.md",
+  "docs/performance/README.md",
   "docs/roadmap/README.md",
+  "docs/site/index.html",
+  "docs/site/styles.css",
+  "docs/site/site.js",
+  "benchmarks/README.md",
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
+  ".github/workflows/pages.yml",
 ];
 
 for (const requiredPath of required) {
   if (!exists(requiredPath)) {
-    errors.push(`Missing public-readiness file: ${requiredPath}`);
+    errors.push(`Missing open-source/public-readiness file: ${requiredPath}`);
   }
 }
 
@@ -87,12 +95,22 @@ if (exists("Directory.Build.props") &&
 
 if (exists("README.md")) {
   const readme = read("README.md");
+
+  if (!readme.includes("open-source-from-day-one")) {
+    errors.push("README must declare the engine open source from day one.");
+  }
+
   if (!readme.includes("ChicoDotNet/Mayordomo.Game")) {
     errors.push("README must document the private product repository boundary.");
   }
+
   if (!readme.includes("Mayordomo Engine → Mayordomo.Game") &&
       !readme.includes("Mayordomo Engine -> Mayordomo.Game")) {
     errors.push("README must explicitly document the forbidden reverse dependency.");
+  }
+
+  if (!readme.includes("≤ 256 KiB") || !readme.includes("≤ 512 KiB")) {
+    errors.push("README must publish the current Core footprint budgets.");
   }
 }
 
@@ -114,7 +132,7 @@ for (const sourcePath of sourceFiles) {
     errors.push(`Engine source references private product identity: ${sourcePath}`);
   }
 
-  if (/\b(Alfol[ií]|Devorador|Diezmo|Tithe|Tentaci[oó]n)\b/i.test(source)) {
+  if (/\b(Alfol[ií]|Devorador|Diezmo|Tithe|Tentaci[oó]n|Ministerio|Corona de)\b/i.test(source)) {
     errors.push(`Engine source contains Mayordomo-specific game vocabulary: ${sourcePath}`);
   }
 }
@@ -127,5 +145,5 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("PUBLIC-READINESS STRUCTURAL GATE PASSED");
+console.log("OPEN-SOURCE / PUBLIC-READINESS STRUCTURAL GATE PASSED");
 console.log("This gate supplements, but does not replace, human history/provenance/security review.");

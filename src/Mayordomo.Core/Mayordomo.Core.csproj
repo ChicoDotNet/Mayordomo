@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Mayordomo.Core</AssemblyName>
+    <RootNamespace>Mayordomo</RootNamespace>
+    <Description>Authoritative reusable board-game contracts and Mayordomo platform primitives.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

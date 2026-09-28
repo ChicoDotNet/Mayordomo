@@ -19,6 +19,7 @@ The canonical functional specification, complete rule matrix, card corpus, board
 - Rust/.NET experimentation: FerrumWeave, outside the initial critical path until certified for the required surface.
 - Server-authoritative multiplayer and versioned rulesets.
 - Content-driven cards/rules so Mayordomo Studio can evolve toward future editions such as 6.0+.
+- Reusable engine architecture: [clean-room board-game engine specification](docs/architecture/clean-room-board-game-engine.md).
 
 ## Delivery model
 

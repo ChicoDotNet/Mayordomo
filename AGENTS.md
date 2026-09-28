@@ -1,109 +1,144 @@
-# Mayordomo agent contract
+# Mayordomo Engine agent contract
 
 ## Mission
 
-Build the digital Mayordomo platform while preserving official game behavior as explicit, versioned, testable contracts.
+Build a reusable deterministic board-game engine that is proven by real product use without depending on any branded product implementation.
 
-The product must separate the reusable board-game platform from Mayordomo-specific rules, content, artwork, and branding so future **properly licensed** game packs can reuse infrastructure without contaminating the Mayordomo ruleset.
+The commercial product lives in `ChicoDotNet/Mayordomo.Game`.
 
-Do not invent missing rules, card text, artwork, doctrine, or product claims. Unknowns remain explicit until an authorized canonical source resolves them.
+The dependency direction is non-negotiable:
+
+```text
+Mayordomo.Game ─────┐
+Mayordomo Studio ───┼──> Mayordomo Engine
+Product clients ────┘
+
+Mayordomo Engine -X-> Mayordomo.Game
+Mayordomo Engine -X-> Studio
+Mayordomo Engine -X-> branded clients/content
+```
+
+The engine must not know that Mayordomo exists as a game.
 
 ## Institutional engineering references
 
 For meaningful engineering work, use the authoritative ASBN practices maintained in `ChicoDotNet/ArquitectoDeSoluciones`:
 
-- `asbn-senior-tdd-developer` for incremental product delivery and test evidence;
+- `asbn-senior-tdd-developer` for incremental delivery and test evidence;
 - `asbn-scrumban-agent` for owner-visible checkpoints;
 - `asbn-software-design` for architecture and boundaries;
 - `asbn-senior-devops-engineer` for CI/CD and runner work;
-- `asbn-ux-cx-architect` for material UI/UX/CX/accessibility work;
-- the smallest relevant stack skill for the surface being changed.
+- the smallest relevant stack/domain skill for the surface being changed.
 
 Project-local decisions in this repository take precedence over generic defaults.
 
+## Public-safe history
+
+Treat every commit and retained branch in this repository as potentially public.
+
+Never commit private/proprietary product material here with the intention of deleting it later.
+
+Private product work belongs in `ChicoDotNet/Mayordomo.Game`.
+
 ## Delivery model
 
-- `main` is stable and receives deliberate promotion from `dev`.
+- `main` is stable.
 - `dev` is the integration branch.
 - Working branches use `features/*`, `bugs/*`, `releases/*`, `hotfixes/*`, or `tags/*`.
-- Working branches keep their internal history and are **squash merged into `dev`**.
-- `dev` stays intentionally clean: one integration commit per accepted working-branch outcome.
-- `dev` is **squash merged into `main`** so `main` stays intentionally clean.
-- Working branches are retained by default as delivery history.
-- No direct product work on `main` or `dev` after bootstrap.
-- After each `dev → main` squash promotion, synchronize `main → dev` with a **regular, content-neutral merge commit** after exact-state validation.
-- CI certifies an exact candidate SHA, not merely a branch name.
+- Working branches preserve detailed history and are **squash merged into `dev`**.
+- `dev` is **squash merged into `main`** for stable promotion.
+- Working branches are retained by default.
+- No direct product work on `main` or `dev`.
+- After promotion, synchronize `main → dev` with a **regular, content-neutral merge commit** after exact-state validation.
+- CI certifies exact candidate states.
 
 ## TDD contract
 
-Every behavior change must identify its observable contract and add validation proportional to risk.
+Every behavior change identifies its observable contract and adds evidence proportional to risk.
 
 Prefer:
 
 1. acceptance/contract behavior;
 2. regression tests for defects;
 3. deterministic component/unit tests;
-4. integration/E2E evidence for cross-boundary behavior.
+4. integration evidence for cross-boundary behavior.
 
-For new behavior prefer:
+New behavior:
 
-`RED → GREEN → REFACTOR`
+`RED → GREEN → REFACTOR → CERTIFY`
 
-For compatibility or external-package integration prefer:
+Compatibility/external integration:
 
 `PRESERVE → REPLAY → DIVERGE → EXPLAIN → FIX → VERIFY → REPEAT → PROMOTE`
 
 Never change expected results merely to make a failing implementation pass.
 
-Coverage is evidence, not a vanity target. The ASBN institutional minimum is 44% line coverage per materially testable project, with >72.8% ideal. Do not manufacture tests merely to raise the percentage.
+Coverage is evidence, not a vanity target. Institutional minimum is 44% line coverage per materially testable project; >72.8% is ideal. Do not manufacture tests to raise the percentage.
 
-## Product boundaries
+## Engine boundary
 
-The architecture distinguishes four concepts:
+This repository may own generic concepts such as:
 
-1. **Engine** — reusable turn, movement, state, event, rule-execution and multiplayer primitives.
-2. **Ruleset** — versioned executable behavior for a game/edition.
-3. **Content Pack** — cards, board definitions, trivia, localized text and other data.
-4. **Brand/Game Pack** — licensed artwork, names, sound, presentation and commercial packaging.
+- match/state identity;
+- players/participants;
+- turns and phases;
+- legal actions;
+- commands and domain events;
+- deterministic random sources;
+- board/topology primitives when proven necessary;
+- generic decks/resources/assets when proven necessary;
+- revision/concurrency/idempotency primitives;
+- replay;
+- state hashing;
+- simulation;
+- bots/test participants;
+- invariant validation;
+- public protocols/contracts required by consumers.
 
-Mayordomo is the first product and first canonical ruleset. Generic engine abstractions must not weaken or reinterpret Mayordomo behavior.
+This repository does **not** own:
 
-Future third-party game packs are out of scope until rights are secured. Their possible existence justifies clean boundaries, not speculative implementation.
+- Mayordomo-specific rules;
+- Mayordomo-specific card/content semantics;
+- crowns, tithes, doctrine, ministries, or other product vocabulary;
+- Mayordomo Studio;
+- branded Web/Unity/Avalonia applications;
+- official card/board/art/audio assets;
+- commercial store/subscription implementation that is product-specific.
 
-## Source and content authority
+The clean-room architecture specification is authoritative for reusable engine design.
 
-- Official Mayordomo rules are canonical product inputs.
-- Every ruleset must be versioned.
-- Every production card/effect must have provenance to an authorized source.
-- A reduced development corpus is allowed only when explicitly authorized or clearly marked as non-production fixture data.
-- Do not silently copy older-edition wording into a newer ruleset.
-- Game behavior and game content are separate concerns.
-- Once a match starts, its ruleset/content version is immutable for that match.
-- Configurable values such as salary belong in versioned game configuration rather than source-code constants unless the official rules require otherwise.
+## Abstraction rule
 
-## Implementation language policy
+Design for extraction, not speculation.
 
-- C# / .NET is the default authoritative implementation language.
-- React UI code uses TypeScript.
-- Unity uses C# with UI Toolkit/UXML/USS; do not describe Unity UI as XAML.
-- Avalonia is the preferred XAML desktop surface for Windows, Linux, and macOS.
-- Rust should enter through FerrumWeave when a justified .NET-compatible boundary exists and must not become a beta dependency until the required FerrumWeave capability is certified.
+When `Mayordomo.Game` needs capability X:
 
-## Server authority
+1. ask whether X is genuinely generic;
+2. describe it without Mayordomo vocabulary;
+3. add the smallest reusable engine primitive through TDD if reuse is real;
+4. keep product-specific behavior private otherwise.
 
-Multiplayer gameplay is server-authoritative.
+A second real game is stronger evidence for abstraction than a hypothetical future game.
 
-Clients may present allowed actions and optimistic visual feedback, but cannot be the authority for:
+## Determinism
 
-- dice/random results;
-- card draws;
-- money;
-- ownership;
-- turn order;
-- penalties;
-- crowns;
-- ruleset transitions;
-- victory.
+Authoritative engine behavior may not directly rely on uncontrolled randomness, wall-clock time, environment state, database random ordering, or client-asserted outcomes.
+
+All such inputs enter through explicit deterministic/replayable boundaries.
+
+## Compatibility
+
+Persisted event/protocol/replay contracts are compatibility surfaces.
+
+Once publicly released, do not reinterpret historical events casually. Breaking changes require explicit versioning and migration strategy.
+
+## Licensing/provenance
+
+The repository is MIT-licensed.
+
+Do not introduce third-party source, data, assets, or generated material without clear provenance and compatible redistribution rights.
+
+The clean-room constraint applies even when a third-party clone/engine uses a permissive license unless an explicit dependency decision says otherwise.
 
 ## ASBN SCRUMban checkpoint
 
@@ -114,4 +149,4 @@ At the end of every meaningful delivery interaction report:
 3. ¿En qué planeas avanzar para la próxima interacción?
 4. ¿Qué te bloquea?
 
-Include estimated increment and global-project progress when a defensible denominator exists.
+Include estimated increment/global progress only when a defensible denominator exists.

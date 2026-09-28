@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+*.slnx text
+*.cs text
+*.csproj text
+*.props text
+*.targets text
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.mjs text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary

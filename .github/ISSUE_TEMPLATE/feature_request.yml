@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a reusable engine capability
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What real product/contributor problem needs solving?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observable behavior
+      description: What should callers be able to observe?
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Likely owner
+      options:
+        - Engine
+        - Protocol/contracts
+        - Application boundary
+        - Infrastructure
+        - Tooling/documentation
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: reuse
+    attributes:
+      label: Reuse evidence
+      description: Is this required by a real product now, or speculative?
+  - type: textarea
+    id: risks
+    attributes:
+      label: Compatibility / licensing / provenance risks

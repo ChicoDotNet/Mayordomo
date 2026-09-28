@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="Mayordomo Engine — a tiny, fast, deterministic open-source board-game engine born from a real game."
+  />
+  <meta name="theme-color" content="#111318" />
+  <title>Mayordomo Engine — tiny, fast, deterministic</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav shell" aria-label="Primary">
+      <a class="brand" href="./">Mayordomo Engine</a>
+      <div class="nav-links">
+        <a href="#story">Story</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#performance">Performance</a>
+        <a href="https://github.com/ChicoDotNet/Mayordomo">GitHub</a>
+      </div>
+    </nav>
+
+    <div class="shell hero-grid">
+      <section>
+        <p class="eyebrow">MIT · OPEN SOURCE FROM DAY ONE</p>
+        <h1>A board-game engine small enough to disappear into your game.</h1>
+        <p class="lede">
+          Deterministic, replayable and server-authoritative. Born while turning
+          a real board game into a digital product — then deliberately separated
+          from that product so other developers can adopt the engine without
+          adopting our game.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/ChicoDotNet/Mayordomo">View source</a>
+          <a class="button" href="https://github.com/ChicoDotNet/Mayordomo/blob/main/docs/architecture/clean-room-board-game-engine.md">Read the architecture</a>
+        </div>
+      </section>
+
+      <aside class="terminal" aria-label="Architecture summary">
+        <div class="terminal-bar"><span></span><span></span><span></span></div>
+        <pre><code>Mayordomo.Game ─────┐
+Mayordomo Studio ───┼──▶ Engine
+Other games ────────┘
+
+Engine ─X─▶ Mayordomo.Game
+
+Core target      ≤ 256 KiB
+Hard ceiling     ≤ 512 KiB
+Runtime deps     0
+License          MIT</code></pre>
+      </aside>
+    </div>
+  </header>
+
+  <main>
+    <section id="story" class="section shell">
+      <p class="eyebrow">THE STORY</p>
+      <h2>It started with Mayordomo. It should not end there.</h2>
+      <div class="prose-grid">
+        <p>
+          The first consumer is <strong>Mayordomo — El juego que no es un juego</strong>.
+          Building its digital version forces the engine to solve real problems:
+          turns, choices, state, deterministic randomness, cards, money, replay,
+          multiplayer and recovery.
+        </p>
+        <p>
+          Instead of letting those concerns fuse into one branded application,
+          the reusable mechanics live here. Mayordomo's rules, Studio, official
+          content and branded clients live privately in <code>Mayordomo.Game</code>.
+          Product knows engine. Engine never knows product.
+        </p>
+      </div>
+    </section>
+
+    <section id="architecture" class="section contrast">
+      <div class="shell">
+        <p class="eyebrow">ARCHITECTURE</p>
+        <h2>Reusable because the dependency points one way.</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>Deterministic core</h3>
+            <p>Same initial state, seed and command stream means the same events and final state.</p>
+          </article>
+          <article class="card">
+            <h3>Headless first</h3>
+            <p>No browser, Unity, XAML, network, database or cloud service is required to execute game behavior.</p>
+          </article>
+          <article class="card">
+            <h3>Server authoritative</h3>
+            <p>Clients ask. The authoritative engine validates and produces the resulting state transition.</p>
+          </article>
+          <article class="card">
+            <h3>Product agnostic</h3>
+            <p>If a concept needs Mayordomo vocabulary to explain it, it probably belongs in Mayordomo.Game.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="performance" class="section shell">
+      <p class="eyebrow">SMALL & FAST BY CONTRACT</p>
+      <h2>Performance claims should survive a build.</h2>
+      <p class="section-intro">
+        We publish budgets first and measurements second. CI enforces the footprint
+        ceiling today; reproducible runtime benchmarks become gates as soon as the
+        walking skeleton has meaningful work to measure.
+      </p>
+
+      <div class="metrics" id="metrics">
+        <article class="metric">
+          <span class="metric-value" id="actual-size">measuring…</span>
+          <span class="metric-label">current Core DLL</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value">≤ 256 KiB</span>
+          <span class="metric-label">design target</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value">≤ 512 KiB</span>
+          <span class="metric-label">hard CI ceiling</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value" id="runtime-deps">0</span>
+          <span class="metric-label">mandatory Core runtime packages</span>
+        </article>
+      </div>
+
+      <p class="fineprint" id="metrics-note">
+        Runtime throughput benchmarks will appear here after the first meaningful deterministic walking skeleton.
+      </p>
+    </section>
+
+    <section class="section contrast">
+      <div class="shell callout">
+        <div>
+          <p class="eyebrow">FOR GAME DEVELOPERS</p>
+          <h2>Your rules should be the interesting part.</h2>
+          <p>
+            The engine should bring deterministic execution, replay and reusable
+            board-game primitives without forcing your game to inherit our UI,
+            brand, cloud, content model or commercial stack.
+          </p>
+        </div>
+        <a class="button primary" href="https://github.com/ChicoDotNet/Mayordomo/blob/main/CONTRIBUTING.md">Contribute</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer shell">
+    <span>Mayordomo Engine · MIT</span>
+    <span>Built in public-safe history from day one.</span>
+  </footer>
+
+  <script src="site.js"></script>
+</body>
+</html>

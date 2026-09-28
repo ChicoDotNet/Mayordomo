@@ -50,6 +50,43 @@ public sealed class RandomEventTurnRotationTests
   }
 
   [Fact]
+  public void Replay_rejects_a_tampered_random_result()
+  {
+    var initial = MatchState.Create(
+      MatchId.Create("match-001"),
+      randomSeed: 0x5EEDUL);
+
+    var transition = MatchEngine.Execute(
+      initial,
+      GenerateRandomIntCommand.Create(
+        CommandId.Create("command-001"),
+        initial.MatchId,
+        initial.Revision,
+        minInclusive: 1,
+        maxExclusive: 7));
+
+    var generated = Assert.IsType<RandomIntGeneratedEvent>(
+      Assert.Single(transition.Events));
+
+    var tampered = generated with
+    {
+      Value = generated.Value == 6
+        ? 5
+        : 6
+    };
+
+    var error = Assert.Throws<InvalidOperationException>(
+      () => MatchEngine.Reduce(
+        initial,
+        [tampered]));
+
+    Assert.Contains(
+      "deterministic random state",
+      error.Message,
+      StringComparison.OrdinalIgnoreCase);
+  }
+
+  [Fact]
   public void End_turn_rotates_to_the_next_participant_and_replays()
   {
     var fixture = CreateStartedTwoParticipantMatch();

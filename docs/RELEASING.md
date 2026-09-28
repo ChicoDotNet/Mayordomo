@@ -1,6 +1,6 @@
 # Releasing Mayordomo Engine
 
-There is currently no supported public release.
+There is currently no supported packaged release.
 
 When releases begin, a release candidate must:
 
@@ -15,4 +15,4 @@ When releases begin, a release candidate must:
 
 Do not publish packages from an unreviewed working branch.
 
-The first public release additionally requires the public-release checklist in the engine roadmap.
+The first supported packaged release additionally requires the release-readiness checklist in the engine roadmap.

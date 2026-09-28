@@ -2,7 +2,7 @@
 
 All notable changes to Mayordomo Engine will be documented here once releases begin.
 
-The project is currently pre-alpha and has no supported public release.
+The project is currently pre-alpha and has no supported packaged release.
 
 ## Unreleased
 
@@ -10,5 +10,5 @@ The project is currently pre-alpha and has no supported public release.
 
 - repository foundation;
 - deterministic clean-room engine architecture;
-- MIT licensing and future contribution governance;
+- MIT licensing and open-source contribution governance;
 - public-engine/private-product repository boundary.

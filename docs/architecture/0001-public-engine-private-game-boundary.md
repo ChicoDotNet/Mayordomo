@@ -6,7 +6,7 @@
 
 The first commercial consumer of the engine is Mayordomo.
 
-The reusable engine may later become public MIT-licensed software. The commercial product contains private implementation, official/authorized content, Studio capabilities, branded clients, and potentially licensed third-party material that must not automatically become open source.
+The reusable engine is MIT-licensed open-source software from inception. Repository visibility is temporarily private only during bootstrap. The commercial product contains private implementation, official/authorized content, Studio capabilities, branded clients, and potentially licensed third-party material that must not become part of the open-source engine merely because it consumes it.
 
 The previously accepted engine architecture already establishes the non-negotiable dependency direction:
 
@@ -16,7 +16,7 @@ The previously accepted engine architecture already establishes the non-negotiab
 
 Use two repositories.
 
-### Publicable engine
+### Open-source engine
 
 `ChicoDotNet/Mayordomo`
 
@@ -76,7 +76,7 @@ Do not commit private product material here temporarily and delete it later. Rea
 
 ### Positive
 
-- engine can be open-sourced independently;
+- engine remains independently open source;
 - Rafael/product IP remains isolated;
 - Studio remains a competitive capability;
 - private licensed game packs can reuse the engine;

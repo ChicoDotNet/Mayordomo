@@ -63,9 +63,9 @@ Candidates are not commitments until a real slice needs them.
 - application/persistence ports only when required;
 - real-time/server host adapters without contaminating the engine.
 
-## Public release candidate
+## Public-visibility readiness
 
-Before changing repository visibility:
+Before changing GitHub repository visibility from private bootstrap to public:
 
 - public-readiness CI green;
 - all reachable branches/history reviewed;
@@ -76,6 +76,6 @@ Before changing repository visibility:
 - security and contribution paths verified;
 - at least one real private product consuming the engine successfully.
 
-## Post-public evolution
+## Public evolution
 
 Let independent consumers and a second real game provide evidence for further abstractions.

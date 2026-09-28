@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mayordomo.Core/Mayordomo.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -191,6 +191,38 @@ public sealed class MatchState
       RandomState);
   }
 
+  internal MatchState ChangeTurnPhase(
+    ParticipantId participantId,
+    PhaseId previousPhaseId,
+    PhaseId phaseId,
+    Revision revision)
+  {
+    if (Turn is null)
+    {
+      throw new InvalidOperationException(
+        $"Match '{MatchId}' does not have an active turn.");
+    }
+
+    if (Turn.ParticipantId != participantId)
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' cannot change the active turn owned by '{Turn.ParticipantId}'.");
+    }
+
+    if (Turn.PhaseId != previousPhaseId)
+    {
+      throw new InvalidOperationException(
+        $"Turn phase '{previousPhaseId}' does not match current phase '{Turn.PhaseId}'.");
+    }
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      new TurnState(participantId, phaseId),
+      RandomState);
+  }
+
   internal MatchState ApplyRandom(
     int minInclusive,
     int maxExclusive,
@@ -438,6 +470,46 @@ public static class MatchEngine
       new ReadOnlyCollection<MatchEvent>(events));
   }
 
+  public static MatchTransition Execute(
+    MatchState state,
+    ChangeTurnPhaseCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var activeTurn = state.Turn
+      ?? throw new InvalidOperationException(
+        $"Match '{state.MatchId}' does not have an active turn.");
+
+    if (activeTurn.ParticipantId != command.ParticipantId)
+    {
+      throw new InvalidOperationException(
+        $"Participant '{command.ParticipantId}' cannot change the active turn owned by '{activeTurn.ParticipantId}'.");
+    }
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new TurnPhaseChangedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        activeTurn.PhaseId,
+        command.PhaseId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
   public static LegalActionSet QueryLegalActions(
     MatchState state,
     ParticipantId actor,
@@ -536,6 +608,12 @@ public static class MatchEngine
           current.EndTurn(
             ended.ParticipantId,
             ended.Revision),
+        TurnPhaseChangedEvent changed =>
+          current.ChangeTurnPhase(
+            changed.ParticipantId,
+            changed.PreviousPhaseId,
+            changed.PhaseId,
+            changed.Revision),
         RandomIntGeneratedEvent generated =>
           current.ApplyRandom(
             generated.MinInclusive,

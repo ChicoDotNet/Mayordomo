@@ -1,6 +1,6 @@
 # Licensing and intellectual-property boundary
 
-This repository is intended to be safe to publish in full, including its reachable Git history.
+Mayordomo Engine is MIT-licensed open-source software from inception. Its reachable Git history is maintained public-safe even while repository visibility remains private during bootstrap.
 
 ## MIT software
 
@@ -10,7 +10,7 @@ The MIT license applies only to material this repository has the right to licens
 
 ## Repository split
 
-The intended boundary is:
+The repository boundary is:
 
 - `ChicoDotNet/Mayordomo` — reusable board-game engine and public-safe engineering assets;
 - `ChicoDotNet/Mayordomo.Game` — private commercial Mayordomo implementation and Studio.

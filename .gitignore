@@ -26,3 +26,6 @@ Builds/
 
 # macOS/local files
 .DS_Store
+
+# Generated GitHub Pages metrics
+docs/site/engine-metrics.json

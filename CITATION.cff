@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use Mayordomo Engine in research or teaching, please cite this repository."
+title: "Mayordomo Engine"
+type: software
+authors:
+  - family-names: "Lara Ramos"
+    given-names: "Alfonso"
+repository-code: "https://github.com/ChicoDotNet/Mayordomo"
+license: MIT

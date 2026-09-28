@@ -15,14 +15,21 @@ public sealed class DeterministicRandom
 
   private ulong _state;
 
-  private DeterministicRandom(ulong seed)
+  private DeterministicRandom(RandomState state)
   {
-    _state = seed;
+    _state = state.Value;
   }
+
+  public RandomState State => new(_state);
 
   public static DeterministicRandom Create(ulong seed)
   {
-    return new DeterministicRandom(seed);
+    return new DeterministicRandom(new RandomState(seed));
+  }
+
+  public static DeterministicRandom Restore(RandomState state)
+  {
+    return new DeterministicRandom(state);
   }
 
   public ulong NextUInt64()

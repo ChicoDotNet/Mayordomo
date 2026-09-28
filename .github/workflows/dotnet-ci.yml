@@ -14,6 +14,19 @@ on:
       - 'global.json'
       - 'scripts/validate-branch-name.mjs'
       - '.github/workflows/dotnet-ci.yml'
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/*.slnx'
+      - 'global.json'
+      - 'scripts/validate-branch-name.mjs'
+      - '.github/workflows/dotnet-ci.yml'
   workflow_dispatch:
 
 permissions:

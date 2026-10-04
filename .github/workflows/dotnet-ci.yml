@@ -15,6 +15,8 @@ on:
       - 'scripts/validate-branch-name.mjs'
       - 'scripts/check-engine-budget.mjs'
       - 'scripts/compute-release-version*.mjs'
+      - 'scripts/test-package-consumer.mjs'
+      - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   push:
     branches:
@@ -30,6 +32,8 @@ on:
       - 'scripts/validate-branch-name.mjs'
       - 'scripts/check-engine-budget.mjs'
       - 'scripts/compute-release-version*.mjs'
+      - 'scripts/test-package-consumer.mjs'
+      - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   workflow_dispatch:
 
@@ -67,3 +71,26 @@ jobs:
 
       - name: Test
         run: dotnet test Mayordomo.slnx --configuration Release --no-build
+
+      - name: Pack Mayordomo.Core consumer candidate
+        run: >
+          dotnet pack src/Mayordomo.Core/Mayordomo.Core.csproj
+          --configuration Release
+          --no-build
+          --output artifacts/nuget
+          -p:PackageVersion=1.0.20261004.999
+          -p:AssemblyVersion=1.0.0.0
+          -p:FileVersion=1.0.26277.999
+          -p:InformationalVersion=1.0.20261004.999+$GITHUB_SHA
+          -p:RepositoryCommit=$GITHUB_SHA
+
+      - name: Verify package and symbol artifacts
+        run: |
+          test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.nupkg
+          test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.snupkg
+
+      - name: Smoke test installed package
+        run: >
+          node scripts/test-package-consumer.mjs
+          artifacts/nuget
+          1.0.20261004.999

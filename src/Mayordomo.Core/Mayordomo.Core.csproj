@@ -2,7 +2,26 @@
   <PropertyGroup>
     <AssemblyName>Mayordomo.Core</AssemblyName>
     <RootNamespace>Mayordomo</RootNamespace>
-    <Description>Authoritative reusable board-game contracts and Mayordomo platform primitives.</Description>
-    <IsPackable>false</IsPackable>
+    <Description>Reusable deterministic server-authoritative board-game engine with replay, simulation, invariants, and stable public contracts.</Description>
+    <Title>Mayordomo.Core</Title>
+    <PackageId>Mayordomo.Core</PackageId>
+    <PackageTags>board-game;engine;deterministic;replay;simulation;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <IsPackable>true</IsPackable>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md"
+          Pack="true"
+          PackagePath="\"
+          Link="README.md" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,512 @@
+name: Publish Mayordomo.Core
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'src/Mayordomo.Core/**'
+      - 'tests/Mayordomo.Core.Tests/**'
+      - 'benchmarks/Mayordomo.Core.Benchmarks/**'
+      - 'scripts/check-public-readiness.mjs'
+      - 'scripts/check-engine-budget.mjs'
+      - 'scripts/check-benchmark-budget*.mjs'
+      - 'scripts/compute-release-version*.mjs'
+      - 'scripts/test-package-consumer.mjs'
+      - 'scripts/audit-nuget-package.mjs'
+      - 'scripts/check-release-finalization*.mjs'
+      - 'CHANGELOG.md'
+      - 'docs/RELEASING.md'
+      - 'README.md'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - '.github/workflows/publish-nuget.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the certified 1.0 package to NuGet.org.
+        required: true
+        default: false
+        type: boolean
+      nuget_user:
+        description: Exact nuget.org profile name authorized by Trusted Publishing.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release-candidate:
+    name: Build and audit release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    outputs:
+      package-version: ${{ steps.version.outputs.package_version }}
+      artifact-name: ${{ steps.version.outputs.artifact_name }}
+      source-sha: ${{ steps.version.outputs.source_sha }}
+
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      MAYORDOMO_BENCHMARK_ITERATIONS: '10000'
+      MAYORDOMO_BENCHMARK_WARMUP: '1000'
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PUBLISH_REQUESTED: ${{ inputs.publish }}
+
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Resolve deterministic 1.0 release identity
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" &&
+                "${{ inputs.publish }}" == "true" &&
+                "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Publishing is allowed only from refs/heads/main."
+            exit 1
+          fi
+
+          release_date="$(TZ=America/Mexico_City date +%Y%m%d)"
+          build_number="$GITHUB_RUN_NUMBER"
+
+          version_json="$(
+            node scripts/compute-release-version.mjs               1               0               "$release_date"               "$build_number"               "$SOURCE_SHA"
+          )"
+
+          package_version="$(
+            node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.packageVersion)' "$version_json"
+          )"
+          assembly_version="$(
+            node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.assemblyVersion)' "$version_json"
+          )"
+          file_version="$(
+            node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.fileVersion)' "$version_json"
+          )"
+          informational_version="$(
+            node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.informationalVersion)' "$version_json"
+          )"
+          artifact_name="Mayordomo.Core-$package_version"
+
+          {
+            echo "package_version=$package_version"
+            echo "artifact_name=$artifact_name"
+            echo "source_sha=$SOURCE_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "PACKAGE_VERSION=$package_version"
+            echo "ASSEMBLY_VERSION=$assembly_version"
+            echo "FILE_VERSION=$file_version"
+            echo "INFORMATIONAL_VERSION=$informational_version"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "## Mayordomo.Core 1.0 release candidate"
+            echo
+            echo "- PackageVersion: `$package_version`"
+            echo "- AssemblyVersion: `$assembly_version`"
+            echo "- FileVersion: `$file_version`"
+            echo "- InformationalVersion: `$informational_version`"
+            echo "- Source SHA: `$SOURCE_SHA`"
+            echo "- Publish requested: `${PUBLISH_REQUESTED:-false}`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify release-version contract
+        run: node --test scripts/compute-release-version.test.mjs
+
+      - name: Verify final-release contract
+        run: |
+          node --test scripts/check-release-finalization.test.mjs
+          node scripts/check-release-finalization.mjs
+
+      - name: Verify public repository readiness
+        run: node scripts/check-public-readiness.mjs
+
+      - name: Restore
+        run: dotnet restore Mayordomo.slnx
+
+      - name: Build exact release assembly
+        run: >
+          dotnet build Mayordomo.slnx
+          --configuration Release
+          --no-restore
+          -p:PackageVersion="$PACKAGE_VERSION"
+          -p:AssemblyVersion="$ASSEMBLY_VERSION"
+          -p:FileVersion="$FILE_VERSION"
+          -p:InformationalVersion="$INFORMATIONAL_VERSION"
+          -p:RepositoryCommit="$SOURCE_SHA"
+
+      - name: Enforce engine footprint
+        run: node scripts/check-engine-budget.mjs
+
+      - name: Test
+        run: dotnet test Mayordomo.slnx --configuration Release --no-build
+
+      - name: Pack exact release artifacts
+        run: >
+          dotnet pack src/Mayordomo.Core/Mayordomo.Core.csproj
+          --configuration Release
+          --no-build
+          --output artifacts/nuget
+          -p:PackageVersion="$PACKAGE_VERSION"
+          -p:AssemblyVersion="$ASSEMBLY_VERSION"
+          -p:FileVersion="$FILE_VERSION"
+          -p:InformationalVersion="$INFORMATIONAL_VERSION"
+          -p:RepositoryCommit="$SOURCE_SHA"
+
+      - name: Verify package and symbol artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+
+          test -f "$package"
+          test -f "$symbols"
+
+          sha256sum "$package" "$symbols" |
+            tee artifacts/nuget/SHA256SUMS.txt
+
+      - name: Audit NuGet package contract
+        run: >
+          node scripts/audit-nuget-package.mjs
+          artifacts/nuget
+          "$PACKAGE_VERSION"
+          "$SOURCE_SHA"
+
+      - name: Smoke test installed package
+        run: >
+          node scripts/test-package-consumer.mjs
+          artifacts/nuget
+          "$PACKAGE_VERSION"
+
+      - name: Restore benchmark harness
+        run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
+
+      - name: Build benchmark harness
+        run: dotnet build benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run measured performance suite
+        shell: bash
+        env:
+          MAYORDOMO_BENCHMARK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/benchmarks
+
+          dotnet run             --project benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj             --configuration Release             --no-build             > artifacts/benchmarks/core-benchmark.json
+
+          cat artifacts/benchmarks/core-benchmark.json
+          node scripts/check-benchmark-budget.mjs             artifacts/benchmarks/core-benchmark.json
+
+      - name: Ensure publish version is currently unused
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/$PACKAGE_VERSION/mayordomo.core.$PACKAGE_VERSION.nupkg"
+          status="$(
+            curl               --silent               --show-error               --location               --output /dev/null               --write-out '%{http_code}'               "$url"
+          )"
+
+          if [[ "$status" != "404" ]]; then
+            echo "::error::Expected Mayordomo.Core $PACKAGE_VERSION to be unpublished; NuGet returned HTTP $status."
+            exit 1
+          fi
+
+      - name: Upload certified release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.artifact_name }}
+          path: |
+            artifacts/nuget/*.nupkg
+            artifacts/nuget/*.snupkg
+            artifacts/nuget/SHA256SUMS.txt
+            artifacts/benchmarks/core-benchmark.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish Mayordomo.Core to NuGet.org
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs:
+      - release-candidate
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Validate NuGet identity
+        shell: bash
+        env:
+          NUGET_USER: ${{ inputs.nuget_user }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$NUGET_USER" ]]; then
+            echo "::error::nuget_user is required when publish=true."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Download certified candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.release-candidate.outputs.artifact-name }}
+          path: artifacts
+
+      - name: NuGet login via OIDC
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ inputs.nuget_user }}
+
+      - name: Publish immutable package and symbols
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ needs.release-candidate.outputs.package-version }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+
+          test -f "$package"
+          test -f "$symbols"
+
+          dotnet nuget push "$package"             --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json
+
+  finalize-release:
+    name: Finalize immutable GitHub Release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs:
+      - release-candidate
+      - publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE_VERSION: ${{ needs.release-candidate.outputs.package-version }}
+      SOURCE_SHA: ${{ needs.release-candidate.outputs.source-sha }}
+      ARTIFACT_NAME: ${{ needs.release-candidate.outputs.artifact-name }}
+
+    steps:
+      - name: Download certified release candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: artifacts
+
+      - name: Verify certified artifacts before release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+
+          test -f "$package"
+          test -f "$symbols"
+          test -f artifacts/nuget/SHA256SUMS.txt
+          test -f artifacts/benchmarks/core-benchmark.json
+          sha256sum -c artifacts/nuget/SHA256SUMS.txt
+
+      - name: Confirm published package is visible on NuGet.org
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/$PACKAGE_VERSION/mayordomo.core.$PACKAGE_VERSION.nupkg"
+          status=""
+
+          for attempt in {1..12}; do
+            status="$(
+              curl \
+                --silent \
+                --show-error \
+                --location \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                "$url"
+            )"
+
+            if [[ "$status" == "200" ]]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Published package was not visible on NuGet.org; final HTTP status: $status."
+            exit 1
+          fi
+
+      - name: Create or verify immutable source tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+
+          if tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null)"; then
+            tag_sha="$(jq -r '.object.sha' <<<"$tag_json")"
+
+            if [[ "$tag_sha" != "$SOURCE_SHA" ]]; then
+              echo "::error::Tag $tag points to $tag_sha instead of certified source $SOURCE_SHA."
+              exit 1
+            fi
+          else
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" \
+              -f sha="$SOURCE_SHA" \
+              >/dev/null
+          fi
+
+      - name: Create release manifest and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          mkdir -p artifacts/release
+
+          package_sha="$(
+            awk '$2 ~ /\.nupkg$/ && $2 !~ /\.snupkg$/ {print $1}' \
+              artifacts/nuget/SHA256SUMS.txt
+          )"
+          symbols_sha="$(
+            awk '$2 ~ /\.snupkg$/ {print $1}' \
+              artifacts/nuget/SHA256SUMS.txt
+          )"
+
+          test -n "$package_sha"
+          test -n "$symbols_sha"
+
+          jq -n \
+            --arg packageId "Mayordomo.Core" \
+            --arg packageVersion "$PACKAGE_VERSION" \
+            --arg sourceSha "$SOURCE_SHA" \
+            --arg tag "$tag" \
+            --arg publicApiSha256 "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A" \
+            --arg packageSha256 "$package_sha" \
+            --arg symbolPackageSha256 "$symbols_sha" \
+            '{
+              packageId: $packageId,
+              packageVersion: $packageVersion,
+              sourceSha: $sourceSha,
+              tag: $tag,
+              stateHashFormatVersion: 2,
+              publicApiSha256: $publicApiSha256,
+              packageSha256: $packageSha256,
+              symbolPackageSha256: $symbolPackageSha256
+            }' \
+            > artifacts/release/release-manifest.json
+
+          {
+            echo "# Mayordomo.Core $PACKAGE_VERSION"
+            echo
+            echo "First supported 1.0 release train package."
+            echo
+            echo "- NuGet package: Mayordomo.Core $PACKAGE_VERSION"
+            echo "- Certified source SHA: $SOURCE_SHA"
+            echo "- Immutable source tag: $tag"
+            echo "- Canonical state-hash format: v2"
+            echo "- Public API baseline SHA-256: 20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A"
+            echo
+            echo "The attached package, symbol package, package checksums, benchmark evidence, and release manifest come from the same certified release-candidate artifact."
+          } > artifacts/release/RELEASE_NOTES.md
+
+      - name: Create or repair GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          title="Mayordomo.Core $PACKAGE_VERSION"
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+          assets=(
+            "$package"
+            "$symbols"
+            "artifacts/nuget/SHA256SUMS.txt"
+            "artifacts/benchmarks/core-benchmark.json"
+            "artifacts/release/release-manifest.json"
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+            gh release edit "$tag" \
+              --title "$title" \
+              --notes-file artifacts/release/RELEASE_NOTES.md
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --verify-tag \
+              --title "$title" \
+              --notes-file artifacts/release/RELEASE_NOTES.md
+          fi
+
+      - name: Audit final release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+
+          test "$tag_sha" = "$SOURCE_SHA"
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$tag"
+          test "$(jq -r '.draft' <<<"$release_json")" = "false"
+          test "$(jq -r '.prerelease' <<<"$release_json")" = "false"
+
+          asset_names="$(jq -r '.assets[].name' <<<"$release_json")"
+          for expected in
+            "Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+            "Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+            "SHA256SUMS.txt"
+            "core-benchmark.json"
+            "release-manifest.json";
+          do
+            grep -Fx "$expected" <<<"$asset_names" >/dev/null
+          done
+
+          {
+            echo "## Stable release finalized"
+            echo
+            echo "- PackageVersion: $PACKAGE_VERSION"
+            echo "- Source SHA: $SOURCE_SHA"
+            echo "- Tag: $tag"
+            echo "- GitHub Release: $(jq -r '.html_url' <<<"$release_json")"
+          } >> "$GITHUB_STEP_SUMMARY"

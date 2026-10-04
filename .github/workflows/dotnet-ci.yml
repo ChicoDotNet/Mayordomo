@@ -14,6 +14,10 @@ on:
       - 'global.json'
       - 'scripts/validate-branch-name.mjs'
       - 'scripts/check-engine-budget.mjs'
+      - 'scripts/compute-release-version*.mjs'
+      - 'scripts/test-package-consumer.mjs'
+      - 'scripts/audit-nuget-package.mjs'
+      - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   push:
     branches:
@@ -28,6 +32,9 @@ on:
       - 'global.json'
       - 'scripts/validate-branch-name.mjs'
       - 'scripts/check-engine-budget.mjs'
+      - 'scripts/compute-release-version*.mjs'
+      - 'scripts/test-package-consumer.mjs'
+      - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   workflow_dispatch:
 
@@ -47,6 +54,9 @@ jobs:
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
         run: node scripts/validate-branch-name.mjs "$GITHUB_HEAD_REF"
 
+      - name: Verify release-version contract
+        run: node --test scripts/compute-release-version.test.mjs
+
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -62,3 +72,33 @@ jobs:
 
       - name: Test
         run: dotnet test Mayordomo.slnx --configuration Release --no-build
+
+      - name: Pack Mayordomo.Core consumer candidate
+        run: >
+          dotnet pack src/Mayordomo.Core/Mayordomo.Core.csproj
+          --configuration Release
+          --no-build
+          --output artifacts/nuget
+          -p:PackageVersion=1.0.20261004.999
+          -p:AssemblyVersion=1.0.0.0
+          -p:FileVersion=1.0.26277.999
+          -p:InformationalVersion=1.0.20261004.999+$GITHUB_SHA
+          -p:RepositoryCommit=$GITHUB_SHA
+
+      - name: Verify package and symbol artifacts
+        run: |
+          test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.nupkg
+          test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.snupkg
+
+      - name: Audit NuGet package contract
+        run: >
+          node scripts/audit-nuget-package.mjs
+          artifacts/nuget
+          1.0.20261004.999
+          "$GITHUB_SHA"
+
+      - name: Smoke test installed package
+        run: >
+          node scripts/test-package-consumer.mjs
+          artifacts/nuget
+          1.0.20261004.999

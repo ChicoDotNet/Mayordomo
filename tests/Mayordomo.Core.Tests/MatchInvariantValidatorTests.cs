@@ -154,7 +154,8 @@ public sealed class MatchInvariantValidatorTests
         heldItems,
         decks,
         turn,
-        new RandomState(17UL)
+        new RandomState(17UL),
+        Array.Empty<KeyValuePair<CommandId, string>>()
       ]);
   }
 

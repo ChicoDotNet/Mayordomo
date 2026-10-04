@@ -72,6 +72,24 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
         "NuGet publish job must checkout the certified source before setup-dotnet.");
     }
 
+    const finalizeCheckoutIndex =
+      finalizeBlock.indexOf("uses: actions/checkout@v7");
+    const finalizeCertifiedRefIndex =
+      finalizeBlock.indexOf(
+        "ref: ${{ needs.release-candidate.outputs.source-sha }}");
+    const releaseCommandIndex =
+      finalizeBlock.indexOf("gh release view");
+
+    if (finalizeCheckoutIndex < 0 ||
+        finalizeCertifiedRefIndex < 0 ||
+        releaseCommandIndex < 0 ||
+        finalizeCheckoutIndex >= releaseCommandIndex ||
+        finalizeCertifiedRefIndex >= releaseCommandIndex ||
+        !finalizeBlock.includes("persist-credentials: false")) {
+      errors.push(
+        "Finalization job must checkout the certified source before GitHub Release commands.");
+    }
+
     if (!finalizeBlock.includes("contents: write")) {
       errors.push("Finalization job requires contents: write to create tag/release metadata.");
     }

@@ -297,7 +297,7 @@ public sealed class AdversarialReplayFuzzTests
   }
 
   private static int FindEventIndex<TEvent>(
-    IReadOnlyList<MatchEvent> events)
+    MatchEvent[] events)
     where TEvent : MatchEvent
   {
     for (var index = 0;

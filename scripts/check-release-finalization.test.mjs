@@ -49,6 +49,7 @@ function validContract() {
     '          tag="v$PACKAGE_VERSION"',
     '          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag"',
     '          gh api -f sha="$SOURCE_SHA"',
+    '          gh release view "$tag"',
     '          gh release upload "$tag" "${assets[@]}" --clobber',
     '          gh release create "$tag" "${assets[@]}" --verify-tag',
     "          echo release-manifest.json",

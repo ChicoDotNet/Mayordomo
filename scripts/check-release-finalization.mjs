@@ -23,6 +23,8 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
     "--verify-tag",
     "release-manifest.json",
     "stateHashFormatVersion: 2",
+    "packageSha256: $packageSha256",
+    "symbolPackageSha256: $symbolPackageSha256",
     API_BASELINE,
     'test "$tag_sha" = "$SOURCE_SHA"',
     '"Mayordomo.Core.$PACKAGE_VERSION.nupkg"',

@@ -72,8 +72,8 @@ public static class MatchInvariantValidator
 
   private static void ValidateParticipants(
     MatchState state,
-    ISet<ParticipantId> participants,
-    ICollection<MatchInvariantViolation> violations)
+    HashSet<ParticipantId> participants,
+    List<MatchInvariantViolation> violations)
   {
     foreach (var participant in state.Participants)
     {
@@ -92,8 +92,8 @@ public static class MatchInvariantValidator
 
   private static void ValidatePositions(
     MatchState state,
-    IReadOnlySet<ParticipantId> participants,
-    ICollection<MatchInvariantViolation> violations)
+    HashSet<ParticipantId> participants,
+    List<MatchInvariantViolation> violations)
   {
     foreach (var position in state.Positions
                .OrderBy(
@@ -115,7 +115,7 @@ public static class MatchInvariantValidator
 
   private static void ValidateMissingInventories(
     MatchState state,
-    ICollection<MatchInvariantViolation> violations)
+    List<MatchInvariantViolation> violations)
   {
     var inspected = new HashSet<ParticipantId>();
 
@@ -137,8 +137,8 @@ public static class MatchInvariantValidator
 
   private static void ValidateInventories(
     MatchState state,
-    IReadOnlySet<ParticipantId> participants,
-    ICollection<MatchInvariantViolation> violations)
+    HashSet<ParticipantId> participants,
+    List<MatchInvariantViolation> violations)
   {
     foreach (var inventory in state.HeldItems
                .OrderBy(
@@ -174,7 +174,7 @@ public static class MatchInvariantValidator
 
   private static void ValidateDecks(
     MatchState state,
-    ICollection<MatchInvariantViolation> violations)
+    List<MatchInvariantViolation> violations)
   {
     foreach (var deckEntry in state.Decks
                .OrderBy(
@@ -212,8 +212,8 @@ public static class MatchInvariantValidator
 
   private static void ValidateTurn(
     MatchState state,
-    IReadOnlySet<ParticipantId> participants,
-    ICollection<MatchInvariantViolation> violations)
+    HashSet<ParticipantId> participants,
+    List<MatchInvariantViolation> violations)
   {
     if (state.Turn is null ||
         participants.Contains(state.Turn.ParticipantId))

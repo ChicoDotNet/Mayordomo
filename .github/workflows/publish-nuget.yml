@@ -33,10 +33,6 @@ on:
         description: Exact nuget.org profile name authorized by Trusted Publishing.
         required: false
         type: string
-      build_number:
-        description: Optional release build number override for pre-publish recovery; defaults to the workflow run number.
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -86,15 +82,37 @@ jobs:
           fi
 
           release_date="$(TZ=America/Mexico_City date +%Y%m%d)"
-          build_number="${{ inputs.build_number }}"
+          versions_url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/index.json"
+          published_json="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --fail-with-body \
+              "$versions_url" \
+              2>/dev/null ||
+            printf '{"versions":[]}'
+          )"
 
-          if [[ -z "$build_number" ]]; then
-            build_number="$GITHUB_RUN_NUMBER"
-          fi
+          latest_build="$(
+            node -e '
+              const data = JSON.parse(process.argv[1]);
+              const prefix = `1.0.${process.argv[2]}.`;
+              let max = 0;
+              for (const version of data.versions ?? []) {
+                if (!version.startsWith(prefix)) continue;
+                const build = Number(version.slice(prefix.length));
+                if (Number.isInteger(build) && build > max) max = build;
+              }
+              process.stdout.write(String(max));
+            ' "$published_json" "$release_date"
+          )"
 
-          if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::build_number must be a positive integer when supplied."
-            exit 1
+          build_number="$GITHUB_RUN_NUMBER"
+          next_published_build="$((latest_build + 1))"
+
+          if (( build_number < next_published_build )); then
+            build_number="$next_published_build"
           fi
 
           version_json="$(
@@ -137,7 +155,8 @@ jobs:
             echo "- InformationalVersion: `$informational_version`"
             echo "- Source SHA: `$SOURCE_SHA`"
             echo "- Workflow run: `$GITHUB_RUN_NUMBER`"
-            echo "- Release build: `$build_number`"
+            echo "- Latest published build for date: `$latest_build`"
+            echo "- Selected release build: `$build_number`"
             echo "- Publish requested: `${PUBLISH_REQUESTED:-false}`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -377,7 +396,7 @@ jobs:
           url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/$PACKAGE_VERSION/mayordomo.core.$PACKAGE_VERSION.nupkg"
           status=""
 
-          for attempt in {1..12}; do
+          for attempt in {1..180}; do
             status="$(
               curl \
                 --silent \

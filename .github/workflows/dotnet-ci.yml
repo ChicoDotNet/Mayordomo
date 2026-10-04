@@ -67,15 +67,15 @@ jobs:
       - name: Restore
         run: dotnet restore Mayordomo.slnx
 
-      - name: Build Core and tooling in parallel
+      - name: Build and test Core and tooling in parallel
         shell: bash
         run: |
           set -uo pipefail
 
-          dotnet build tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-restore &
+          dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-restore &
           core_pid=$!
 
-          dotnet build tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj             --configuration Release             --no-restore &
+          dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj             --configuration Release             --no-restore &
           tooling_pid=$!
 
           status=0
@@ -86,22 +86,6 @@ jobs:
       - name: Validate working branch
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
         run: dotnet "$TOOLING_DLL" branch-name "$GITHUB_HEAD_REF"
-
-      - name: Test Core and tooling in parallel
-        shell: bash
-        run: |
-          set -uo pipefail
-
-          dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-build &
-          core_pid=$!
-
-          dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj             --configuration Release             --no-build &
-          tooling_pid=$!
-
-          status=0
-          wait "$core_pid" || status=1
-          wait "$tooling_pid" || status=1
-          exit "$status"
 
       - name: Enforce engine footprint
         run: dotnet "$TOOLING_DLL" engine-budget

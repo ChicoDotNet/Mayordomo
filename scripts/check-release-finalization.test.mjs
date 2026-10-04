@@ -67,6 +67,8 @@ function validContract() {
     '          echo "Mayordomo.Core.$PACKAGE_VERSION.snupkg"',
     '          echo "SHA256SUMS.txt"',
     '          echo "core-benchmark.json"',
+    '          required_assets=(',
+    '          for expected in "${required_assets[@]}"; do',
   ].join("\n");
 
   return {

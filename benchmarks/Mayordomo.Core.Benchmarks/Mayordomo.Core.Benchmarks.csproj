@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Mayordomo.Core.Benchmarks</AssemblyName>
+    <RootNamespace>Mayordomo.Core.Benchmarks</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Mayordomo.Core/Mayordomo.Core.csproj" />
+  </ItemGroup>
+</Project>

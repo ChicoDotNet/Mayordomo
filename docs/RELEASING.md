@@ -50,7 +50,9 @@ The release-candidate job must:
 8. install the generated `.nupkg` into a clean temporary consumer and execute a deterministic replay smoke test;
 9. execute the measured benchmark suite and pass hard performance ceilings;
 10. record SHA-256 checksums for package artifacts;
-11. confirm the target NuGet version is not already published.
+11. audit the actual `.nupkg/.snupkg` metadata and archive layout;
+12. verify the final-release workflow contract;
+13. confirm the target NuGet version is not already published.
 
 Only then may the `publish` job enter the protected `release` environment and request OIDC credentials.
 
@@ -76,17 +78,33 @@ From GitHub Actions:
 4. enter the exact NuGet.org profile name in `nuget_user`;
 5. approve the protected `release` environment if its rules require approval.
 
+After NuGet publication succeeds, `finalize-release` automatically creates the matching immutable source tag and GitHub Release.
+
 The workflow itself rejects publication from any ref other than `refs/heads/main`.
 
 Do not use `--skip-duplicate`. A version collision is a release error because NuGet versions are immutable.
 
 ## Git tag and GitHub Release
 
-NuGet publication and source-release metadata are intentionally separate until the final 1.0 release-audit pack.
+Final source metadata is deliberately a separate `finalize-release` job that runs only after both release-candidate certification and successful NuGet publication.
 
-The final release train must create an immutable source tag and GitHub Release for the exact successfully published package version, attach the certified package/checksum artifacts, and record the source SHA.
+For package version `v{packageVersion}` semantics, finalization uses tag `v{packageVersion}` and:
 
-Separating this from the first OIDC publishing implementation prevents a GitHub Release side-effect from weakening or complicating the NuGet Trusted Publishing gate.
+1. downloads the exact certified artifact from the same workflow run;
+2. verifies the recorded package SHA-256 checksums;
+3. confirms the package is visible on NuGet.org;
+4. creates or verifies immutable tag `v{packageVersion}` at the certified source SHA;
+5. creates or repairs the GitHub Release idempotently;
+6. attaches the `.nupkg`, `.snupkg`, `SHA256SUMS.txt`, benchmark result and `release-manifest.json`;
+7. audits the final tag target, release state and required asset names.
+
+The finalization job has `contents: write` but no OIDC permission. The NuGet publish job has OIDC permission but retains `contents: read`. This keeps package credentials and repository-release mutation separated.
+
+### Recovery after NuGet publication
+
+If NuGet publication succeeds but `finalize-release` fails, rerun only the failed finalization job from the **same workflow run**. The finalizer is repairable: it accepts an already-correct tag and uses release asset upload with clobber semantics.
+
+**Do not dispatch a new publish run** merely to repair GitHub release metadata. A new dispatch receives a new build number and therefore a different immutable package version.
 
 ## Stable release checklist
 

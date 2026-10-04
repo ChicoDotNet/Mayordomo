@@ -23,7 +23,7 @@ public static class MatchStateHasher
 
   public const string Algorithm = "SHA-256";
 
-  public const int FormatVersion = 1;
+  public const int FormatVersion = 2;
 
   public static StateHash Compute(MatchState state)
   {
@@ -100,6 +100,17 @@ public static class MatchStateHasher
     }
 
     writer.AppendUInt64(state.RandomState.Value);
+
+    writer.AppendInt32(state.ProcessedCommands.Count);
+
+    foreach (var processedCommand in state.ProcessedCommands
+               .OrderBy(
+                 entry => entry.Key.Value,
+                 StringComparer.Ordinal))
+    {
+      writer.AppendString(processedCommand.Key.Value);
+      writer.AppendString(processedCommand.Value);
+    }
 
     return new StateHash(
       Convert.ToHexString(hash.GetHashAndReset()));

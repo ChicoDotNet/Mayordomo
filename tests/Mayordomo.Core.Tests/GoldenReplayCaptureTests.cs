@@ -5,7 +5,7 @@ namespace Mayordomo.Core.Tests;
 public sealed class GoldenReplayTests
 {
   private const string ExpectedHash =
-    "C42C907ADF327C4B48616106B3220B179C5182F10E4243D8CCB4C6361378522F";
+    "8395A261C5812CB7339E0F6F9EC2AAA103BA7228A15BA25379227468F45EAC64";
 
   [Fact]
   public void V1_persisted_history_replays_to_the_frozen_canonical_state()

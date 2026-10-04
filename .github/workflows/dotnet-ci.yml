@@ -8,15 +8,14 @@ on:
     paths:
       - '**/*.cs'
       - '**/*.csproj'
+      - '**/*.fs'
+      - '**/*.fsproj'
       - '**/*.props'
       - '**/*.targets'
       - '**/*.slnx'
       - 'global.json'
-      - 'scripts/validate-branch-name.mjs'
-      - 'scripts/check-engine-budget.mjs'
-      - 'scripts/compute-release-version*.mjs'
-      - 'scripts/test-package-consumer.mjs'
-      - 'scripts/audit-nuget-package.mjs'
+      - 'tools/Mayordomo.Tooling/**'
+      - 'tools/Mayordomo.Tooling.Tests/**'
       - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   push:
@@ -26,14 +25,14 @@ on:
     paths:
       - '**/*.cs'
       - '**/*.csproj'
+      - '**/*.fs'
+      - '**/*.fsproj'
       - '**/*.props'
       - '**/*.targets'
       - '**/*.slnx'
       - 'global.json'
-      - 'scripts/validate-branch-name.mjs'
-      - 'scripts/check-engine-budget.mjs'
-      - 'scripts/compute-release-version*.mjs'
-      - 'scripts/test-package-consumer.mjs'
+      - 'tools/Mayordomo.Tooling/**'
+      - 'tools/Mayordomo.Tooling.Tests/**'
       - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   workflow_dispatch:
@@ -45,17 +44,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
+
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - name: Validate working branch
-        if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
-        run: node scripts/validate-branch-name.mjs "$GITHUB_HEAD_REF"
-
-      - name: Verify release-version contract
-        run: node --test scripts/compute-release-version.test.mjs
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -67,11 +62,15 @@ jobs:
       - name: Build
         run: dotnet build Mayordomo.slnx --configuration Release --no-restore
 
-      - name: Enforce engine footprint
-        run: node scripts/check-engine-budget.mjs
+      - name: Validate working branch
+        if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
+        run: dotnet "$TOOLING_DLL" branch-name "$GITHUB_HEAD_REF"
 
       - name: Test
         run: dotnet test Mayordomo.slnx --configuration Release --no-build
+
+      - name: Enforce engine footprint
+        run: dotnet "$TOOLING_DLL" engine-budget
 
       - name: Pack Mayordomo.Core consumer candidate
         run: >
@@ -92,13 +91,13 @@ jobs:
 
       - name: Audit NuGet package contract
         run: >
-          node scripts/audit-nuget-package.mjs
+          dotnet "$TOOLING_DLL" package-audit
           artifacts/nuget
           1.0.20261004.999
           "$GITHUB_SHA"
 
       - name: Smoke test installed package
         run: >
-          node scripts/test-package-consumer.mjs
+          dotnet "$TOOLING_DLL" consumer-smoke
           artifacts/nuget
           1.0.20261004.999

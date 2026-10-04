@@ -40,6 +40,8 @@ function validContract() {
     '          gh release create "$tag" "${assets[@]}" --verify-tag',
     "          echo release-manifest.json",
     "          echo stateHashFormatVersion: 2",
+    "          echo packageSha256: $packageSha256",
+    "          echo symbolPackageSha256: $symbolPackageSha256",
     "          echo " + API_BASELINE,
     '          test "$tag_sha" = "$SOURCE_SHA"',
     '          echo "Mayordomo.Core.$PACKAGE_VERSION.nupkg"',

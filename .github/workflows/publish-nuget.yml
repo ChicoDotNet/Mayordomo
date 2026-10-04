@@ -402,19 +402,35 @@ jobs:
           tag="v$PACKAGE_VERSION"
           mkdir -p artifacts/release
 
+          package_sha="$(
+            awk '$2 ~ /\.nupkg$/ && $2 !~ /\.snupkg$/ {print $1}' \
+              artifacts/nuget/SHA256SUMS.txt
+          )"
+          symbols_sha="$(
+            awk '$2 ~ /\.snupkg$/ {print $1}' \
+              artifacts/nuget/SHA256SUMS.txt
+          )"
+
+          test -n "$package_sha"
+          test -n "$symbols_sha"
+
           jq -n \
             --arg packageId "Mayordomo.Core" \
             --arg packageVersion "$PACKAGE_VERSION" \
             --arg sourceSha "$SOURCE_SHA" \
             --arg tag "$tag" \
             --arg publicApiSha256 "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A" \
+            --arg packageSha256 "$package_sha" \
+            --arg symbolPackageSha256 "$symbols_sha" \
             '{
               packageId: $packageId,
               packageVersion: $packageVersion,
               sourceSha: $sourceSha,
               tag: $tag,
               stateHashFormatVersion: 2,
-              publicApiSha256: $publicApiSha256
+              publicApiSha256: $publicApiSha256,
+              packageSha256: $packageSha256,
+              symbolPackageSha256: $symbolPackageSha256
             }' \
             > artifacts/release/release-manifest.json
 

@@ -191,8 +191,7 @@ public sealed class GoldenReplayCaptureTests
       "\n",
       history.Select(Signature));
 
-    Assert.True(
-      false,
+    Assert.Fail(
       $"GOLDEN_CAPTURE_V1\nHASH={finalHash.Value}\nREVISION={current.Revision.Value}\nEVENTS\n{snapshot}");
   }
 

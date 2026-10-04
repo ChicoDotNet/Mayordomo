@@ -20,6 +20,7 @@ jobs:
 
     env:
       TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v7
@@ -35,6 +36,14 @@ jobs:
 
       - name: Build F# tooling
         run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
+
+      - name: Validate release identity and contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_date="$(TZ=America/Mexico_City date +%Y%m%d)"
+          dotnet "$TOOLING_DLL" release-version             1             0             "$release_date"             "$GITHUB_RUN_NUMBER"             "$SOURCE_SHA"             >/dev/null
+          dotnet "$TOOLING_DLL" release-contract
 
       - name: Validate working branch
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'

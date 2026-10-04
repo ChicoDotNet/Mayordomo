@@ -1600,7 +1600,7 @@ module ReleaseContract =
             errors.Add(
                 "CHANGELOG still claims the project has no supported package release.")
 
-        for marker in
+        let changelogMarkers =
             [
                 "## 1.0 release train"
                 "Mayordomo.Core"
@@ -1608,7 +1608,8 @@ module ReleaseContract =
                 "canonical state-hash format v2"
                 apiBaseline
             ]
-        do
+
+        for marker in changelogMarkers do
             if
                 not (
                     changelog.Contains(
@@ -1619,7 +1620,7 @@ module ReleaseContract =
                 errors.Add(
                     $"CHANGELOG is missing release marker: {marker}")
 
-        for marker in
+        let releasingMarkers =
             [
                 "finalize-release"
                 "same workflow run"
@@ -1627,7 +1628,8 @@ module ReleaseContract =
                 "v{packageVersion}"
                 "release-manifest.json"
             ]
-        do
+
+        for marker in releasingMarkers do
             if
                 not (
                     releasing.Contains(

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// Release hard ceilings: intentionally wider than the measured trend baseline to avoid hosted-runner flakiness.
 export const DEFAULT_BUDGETS = Object.freeze({
   "canonical-state-hash": Object.freeze({
     maxMicrosecondsPerOperation: 250,

@@ -28,6 +28,7 @@ jobs:
       MAYORDOMO_BENCHMARK_WARMUP: '1000'
       MAYORDOMO_BENCHMARK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
+      # NuGet package caching is intentionally disabled here: CI-I03 measured slower benchmark runs.
 
     steps:
       - uses: actions/checkout@v7

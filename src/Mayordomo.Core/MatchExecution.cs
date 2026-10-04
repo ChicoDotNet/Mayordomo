@@ -497,6 +497,44 @@ public static class MatchEngine
 
   public static MatchTransition Execute(
     MatchState state,
+    RelocateParticipantCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    if (!state.Positions.TryGetValue(
+          command.ParticipantId,
+          out var fromPositionId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{command.ParticipantId}' does not have a position.");
+    }
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new ParticipantRelocatedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        fromPositionId,
+        command.ToPositionId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
     StartTurnCommand command)
   {
     ArgumentNullException.ThrowIfNull(state);
@@ -754,6 +792,12 @@ public static class MatchEngine
             moved.FromPositionId,
             moved.ToPositionId,
             moved.Revision),
+        ParticipantRelocatedEvent relocated =>
+          current.MoveParticipant(
+            relocated.ParticipantId,
+            relocated.FromPositionId,
+            relocated.ToPositionId,
+            relocated.Revision),
         TurnStartedEvent started =>
           current.StartTurn(
             started.ParticipantId,

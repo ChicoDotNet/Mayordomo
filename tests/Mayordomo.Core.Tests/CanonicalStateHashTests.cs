@@ -13,8 +13,11 @@ public sealed class CanonicalStateHashTests
 
     var hash = MatchStateHasher.Compute(state);
 
-    Assert.Fail(
-      $"STATE_HASH_V2_CAPTURE={hash.Value}");
+    Assert.Equal(
+      "D48AF929A9C2667990C53569ED6D9FC9F9E2841047741AFB8008979ADB40A169",
+      hash.Value);
+    Assert.Equal("SHA-256", MatchStateHasher.Algorithm);
+    Assert.Equal(2, MatchStateHasher.FormatVersion);
   }
 
   [Fact]

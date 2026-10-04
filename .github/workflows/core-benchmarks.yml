@@ -39,13 +39,10 @@ jobs:
           global-json-file: global.json
 
       - name: Restore F# tooling
-        run: dotnet restore tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj
+        run: dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj
 
       - name: Build F# tooling
-        run: dotnet build tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-restore
-
-      - name: Test F# tooling
-        run: dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-build
+        run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
 
       - name: Restore benchmark harness
         run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj

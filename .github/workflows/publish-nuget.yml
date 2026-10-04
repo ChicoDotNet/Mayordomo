@@ -65,13 +65,10 @@ jobs:
           global-json-file: global.json
 
       - name: Restore F# CI tooling
-        run: dotnet restore tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj
+        run: dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj
 
       - name: Build F# CI tooling
-        run: dotnet build tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-restore
-
-      - name: Test F# CI tooling
-        run: dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-build
+        run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
 
       - name: Resolve deterministic 1.0 release identity
         id: version
@@ -137,12 +134,12 @@ jobs:
       - name: Verify public repository readiness
         run: dotnet "$TOOLING_DLL" public-readiness
 
-      - name: Restore
-        run: dotnet restore Mayordomo.slnx
+      - name: Restore engine tests
+        run: dotnet restore tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj
 
-      - name: Build exact release assembly
+      - name: Build exact release assembly and engine tests
         run: >
-          dotnet build Mayordomo.slnx
+          dotnet build tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj
           --configuration Release
           --no-restore
           -p:PackageVersion="$PACKAGE_VERSION"
@@ -154,8 +151,8 @@ jobs:
       - name: Enforce engine footprint
         run: dotnet "$TOOLING_DLL" engine-budget
 
-      - name: Test
-        run: dotnet test Mayordomo.slnx --configuration Release --no-build
+      - name: Test engine
+        run: dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj --configuration Release --no-build
 
       - name: Pack exact release artifacts
         run: >

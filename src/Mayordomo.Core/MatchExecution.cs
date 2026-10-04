@@ -91,7 +91,8 @@ public sealed class MatchState
     IEnumerable<KeyValuePair<ParticipantId, IReadOnlyList<ParticipantItemId>>> heldItems,
     IEnumerable<KeyValuePair<DeckId, DeckState>> decks,
     TurnState? turn,
-    RandomState randomState)
+    RandomState randomState,
+    IEnumerable<KeyValuePair<CommandId, string>> processedCommands)
   {
     MatchId = matchId;
     Revision = revision;
@@ -107,6 +108,8 @@ public sealed class MatchState
       decks.ToDictionary(entry => entry.Key, entry => entry.Value));
     Turn = turn;
     RandomState = randomState;
+    ProcessedCommands = new ReadOnlyDictionary<CommandId, string>(
+      processedCommands.ToDictionary(entry => entry.Key, entry => entry.Value));
   }
 
   public MatchId MatchId { get; }
@@ -125,6 +128,8 @@ public sealed class MatchState
 
   public RandomState RandomState { get; }
 
+  internal IReadOnlyDictionary<CommandId, string> ProcessedCommands { get; }
+
   public static MatchState Create(MatchId matchId)
   {
     return Create(matchId, randomSeed: 0UL);
@@ -142,7 +147,8 @@ public sealed class MatchState
       [],
       [],
       null,
-      new RandomState(randomSeed));
+      new RandomState(randomSeed),
+      []);
   }
 
   internal MatchState AddParticipant(
@@ -171,7 +177,8 @@ public sealed class MatchState
       heldItems,
       Decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState StartTurn(
@@ -199,7 +206,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       new TurnState(participantId, phaseId),
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState EndTurn(
@@ -226,7 +234,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       null,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState ChangeTurnPhase(
@@ -261,7 +270,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       new TurnState(participantId, phaseId),
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState PlaceParticipant(
@@ -295,7 +305,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState MoveParticipant(
@@ -330,7 +341,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState GrantParticipantItem(
@@ -367,7 +379,8 @@ public sealed class MatchState
       heldItems,
       Decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState RevokeParticipantItem(
@@ -404,7 +417,40 @@ public sealed class MatchState
       heldItems,
       Decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
+  }
+
+  internal MatchState RecordProcessedCommand(
+    CommandId commandId,
+    string fingerprint)
+  {
+    var processedCommands = ProcessedCommands.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    if (processedCommands.TryGetValue(commandId, out var existing))
+    {
+      if (!StringComparer.Ordinal.Equals(existing, fingerprint))
+      {
+        throw new CommandIdConflictException(commandId);
+      }
+
+      return this;
+    }
+
+    processedCommands.Add(commandId, fingerprint);
+
+    return new MatchState(
+      MatchId,
+      Revision,
+      Participants,
+      Positions,
+      HeldItems,
+      Decks,
+      Turn,
+      RandomState,
+      processedCommands);
   }
 
   internal MatchState CreateDeck(
@@ -434,7 +480,8 @@ public sealed class MatchState
       HeldItems,
       decks,
       Turn,
-      RandomState);
+      RandomState,
+      ProcessedCommands);
   }
 
   internal MatchState DrawDeckItem(
@@ -482,7 +529,8 @@ public sealed class MatchState
       HeldItems,
       decks,
       Turn,
-      randomStateAfter);
+      randomStateAfter,
+      ProcessedCommands);
   }
 
   internal MatchState ApplyRandom(
@@ -512,7 +560,8 @@ public sealed class MatchState
       HeldItems,
       Decks,
       Turn,
-      randomStateAfter);
+      randomStateAfter,
+      ProcessedCommands);
   }
 }
 
@@ -566,7 +615,10 @@ public sealed record ParticipantJoinedEvent(
 
 public sealed record MatchTransition(
   MatchState State,
-  IReadOnlyList<MatchEvent> Events);
+  IReadOnlyList<MatchEvent> Events)
+{
+  public bool IsDuplicate { get; init; }
+}
 
 public sealed class RevisionConflictException : InvalidOperationException
 {
@@ -592,6 +644,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -623,6 +684,15 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
+
     ValidateCommandTarget(
       state,
       command.MatchId,
@@ -651,6 +721,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -691,6 +770,15 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
+
     ValidateCommandTarget(
       state,
       command.MatchId,
@@ -729,6 +817,15 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
+
     ValidateCommandTarget(
       state,
       command.MatchId,
@@ -757,6 +854,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -787,6 +893,15 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
+
     ValidateCommandTarget(
       state,
       command.MatchId,
@@ -815,6 +930,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -866,6 +990,15 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
 
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
+
     ValidateCommandTarget(
       state,
       command.MatchId,
@@ -896,6 +1029,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -932,6 +1074,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -984,6 +1135,15 @@ public static class MatchEngine
   {
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(command);
+
+    if (TryGetDuplicateTransition(
+          state,
+          command.CommandId,
+          CommandFingerprint.Create(command),
+          out var duplicate))
+    {
+      return duplicate;
+    }
 
     ValidateCommandTarget(
       state,
@@ -1058,6 +1218,33 @@ public static class MatchEngine
       $"Participant '{participantId}' is not part of the match.");
   }
 
+  private static bool TryGetDuplicateTransition(
+    MatchState state,
+    CommandId commandId,
+    string fingerprint,
+    out MatchTransition transition)
+  {
+    if (!state.ProcessedCommands.TryGetValue(commandId, out var existing))
+    {
+      transition = null!;
+      return false;
+    }
+
+    if (!StringComparer.Ordinal.Equals(existing, fingerprint))
+    {
+      throw new CommandIdConflictException(commandId);
+    }
+
+    transition = new MatchTransition(
+      state,
+      Array.Empty<MatchEvent>())
+    {
+      IsDuplicate = true
+    };
+
+    return true;
+  }
+
   private static void ValidateCommandTarget(
     MatchState state,
     MatchId matchId,
@@ -1084,92 +1271,126 @@ public static class MatchEngine
     ArgumentNullException.ThrowIfNull(state);
     ArgumentNullException.ThrowIfNull(events);
 
+    var eventList = events.ToArray();
     var current = state;
+    var index = 0;
 
-    foreach (var domainEvent in events)
+    while (index < eventList.Length)
     {
-      if (domainEvent.MatchId != current.MatchId)
+      var commandId = eventList[index].CommandId;
+      var end = index + 1;
+
+      while (end < eventList.Length &&
+             eventList[end].CommandId == commandId)
       {
-        throw new InvalidOperationException(
-          $"Event targets match '{domainEvent.MatchId}', but state belongs to '{current.MatchId}'.");
+        end++;
       }
 
-      var expectedRevision = current.Revision.Next();
+      var commandEvents = eventList[index..end];
+      var fingerprint = CommandFingerprint.Create(commandEvents);
 
-      if (domainEvent.Revision != expectedRevision)
+      if (current.ProcessedCommands.TryGetValue(commandId, out var existing))
       {
-        throw new RevisionConflictException(
-          expectedRevision,
-          domainEvent.Revision);
+        if (!StringComparer.Ordinal.Equals(existing, fingerprint))
+        {
+          throw new CommandIdConflictException(commandId);
+        }
+
+        index = end;
+        continue;
       }
 
-      current = domainEvent switch
+      foreach (var domainEvent in commandEvents)
       {
-        ParticipantJoinedEvent joined =>
-          current.AddParticipant(joined.ParticipantId, joined.Revision),
-        ParticipantPlacedEvent placed =>
-          current.PlaceParticipant(
-            placed.ParticipantId,
-            placed.PositionId,
-            placed.Revision),
-        ParticipantMovedEvent moved =>
-          current.MoveParticipant(
-            moved.ParticipantId,
-            moved.FromPositionId,
-            moved.ToPositionId,
-            moved.Revision),
-        ParticipantRelocatedEvent relocated =>
-          current.MoveParticipant(
-            relocated.ParticipantId,
-            relocated.FromPositionId,
-            relocated.ToPositionId,
-            relocated.Revision),
-        ParticipantItemGrantedEvent granted =>
-          current.GrantParticipantItem(
-            granted.ParticipantId,
-            granted.ItemId,
-            granted.Revision),
-        ParticipantItemRevokedEvent revoked =>
-          current.RevokeParticipantItem(
-            revoked.ParticipantId,
-            revoked.ItemId,
-            revoked.Revision),
-        DeckCreatedEvent created =>
-          current.CreateDeck(
-            created.DeckId,
-            created.Items,
-            created.Revision),
-        DeckItemDrawnEvent drawn =>
-          current.DrawDeckItem(
-            drawn.DeckId,
-            drawn.ItemId,
-            drawn.RandomStateAfter,
-            drawn.Revision),
-        TurnStartedEvent started =>
-          current.StartTurn(
-            started.ParticipantId,
-            started.PhaseId,
-            started.Revision),
-        TurnEndedEvent ended =>
-          current.EndTurn(
-            ended.ParticipantId,
-            ended.Revision),
-        TurnPhaseChangedEvent changed =>
-          current.ChangeTurnPhase(
-            changed.ParticipantId,
-            changed.PreviousPhaseId,
-            changed.PhaseId,
-            changed.Revision),
-        RandomIntGeneratedEvent generated =>
-          current.ApplyRandom(
-            generated.MinInclusive,
-            generated.MaxExclusive,
-            generated.Value,
-            generated.RandomStateAfter,
-            generated.Revision),
-        _ => throw new InvalidOperationException(
-          $"Unsupported event type '{domainEvent.GetType().Name}'.")
-      };
+        if (domainEvent.MatchId != current.MatchId)
+        {
+          throw new InvalidOperationException(
+            $"Event targets match '{domainEvent.MatchId}', but state belongs to '{current.MatchId}'.");
+        }
+
+        var expectedRevision = current.Revision.Next();
+
+        if (domainEvent.Revision != expectedRevision)
+        {
+          throw new RevisionConflictException(
+            expectedRevision,
+            domainEvent.Revision);
+        }
+
+        current = domainEvent switch
+        {
+          ParticipantJoinedEvent joined =>
+            current.AddParticipant(joined.ParticipantId, joined.Revision),
+          ParticipantPlacedEvent placed =>
+            current.PlaceParticipant(
+              placed.ParticipantId,
+              placed.PositionId,
+              placed.Revision),
+          ParticipantMovedEvent moved =>
+            current.MoveParticipant(
+              moved.ParticipantId,
+              moved.FromPositionId,
+              moved.ToPositionId,
+              moved.Revision),
+          ParticipantRelocatedEvent relocated =>
+            current.MoveParticipant(
+              relocated.ParticipantId,
+              relocated.FromPositionId,
+              relocated.ToPositionId,
+              relocated.Revision),
+          ParticipantItemGrantedEvent granted =>
+            current.GrantParticipantItem(
+              granted.ParticipantId,
+              granted.ItemId,
+              granted.Revision),
+          ParticipantItemRevokedEvent revoked =>
+            current.RevokeParticipantItem(
+              revoked.ParticipantId,
+              revoked.ItemId,
+              revoked.Revision),
+          DeckCreatedEvent created =>
+            current.CreateDeck(
+              created.DeckId,
+              created.Items,
+              created.Revision),
+          DeckItemDrawnEvent drawn =>
+            current.DrawDeckItem(
+              drawn.DeckId,
+              drawn.ItemId,
+              drawn.RandomStateAfter,
+              drawn.Revision),
+          TurnStartedEvent started =>
+            current.StartTurn(
+              started.ParticipantId,
+              started.PhaseId,
+              started.Revision),
+          TurnEndedEvent ended =>
+            current.EndTurn(
+              ended.ParticipantId,
+              ended.Revision),
+          TurnPhaseChangedEvent changed =>
+            current.ChangeTurnPhase(
+              changed.ParticipantId,
+              changed.PreviousPhaseId,
+              changed.PhaseId,
+              changed.Revision),
+          RandomIntGeneratedEvent generated =>
+            current.ApplyRandom(
+              generated.MinInclusive,
+              generated.MaxExclusive,
+              generated.Value,
+              generated.RandomStateAfter,
+              generated.Revision),
+          _ => throw new InvalidOperationException(
+            $"Unsupported event type '{domainEvent.GetType().Name}'.")
+        };
+      }
+
+      current = current.RecordProcessedCommand(
+        commandId,
+        fingerprint);
+
+      index = end;
     }
 
     return current;

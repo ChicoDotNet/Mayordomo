@@ -327,6 +327,13 @@ jobs:
       ARTIFACT_NAME: ${{ needs.release-candidate.outputs.artifact-name }}
 
     steps:
+      - name: Checkout certified source for release metadata
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-candidate.outputs.source-sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Download certified release candidate
         uses: actions/download-artifact@v4
         with:

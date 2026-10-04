@@ -350,12 +350,12 @@ jobs:
 
           for attempt in {1..12}; do
             status="$(
-              curl
-                --silent
-                --show-error
-                --location
-                --output /dev/null
-                --write-out '%{http_code}'
+              curl \
+                --silent \
+                --show-error \
+                --location \
+                --output /dev/null \
+                --write-out '%{http_code}' \
                 "$url"
             )"
 
@@ -386,11 +386,11 @@ jobs:
               exit 1
             fi
           else
-            gh api
-              --method POST
-              "repos/$GITHUB_REPOSITORY/git/refs"
-              -f ref="refs/tags/$tag"
-              -f sha="$SOURCE_SHA"
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" \
+              -f sha="$SOURCE_SHA" \
               >/dev/null
           fi
 
@@ -402,12 +402,12 @@ jobs:
           tag="v$PACKAGE_VERSION"
           mkdir -p artifacts/release
 
-          jq -n
-            --arg packageId "Mayordomo.Core"
-            --arg packageVersion "$PACKAGE_VERSION"
-            --arg sourceSha "$SOURCE_SHA"
-            --arg tag "$tag"
-            --arg publicApiSha256 "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A"
+          jq -n \
+            --arg packageId "Mayordomo.Core" \
+            --arg packageVersion "$PACKAGE_VERSION" \
+            --arg sourceSha "$SOURCE_SHA" \
+            --arg tag "$tag" \
+            --arg publicApiSha256 "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A" \
             '{
               packageId: $packageId,
               packageVersion: $packageVersion,
@@ -415,7 +415,7 @@ jobs:
               tag: $tag,
               stateHashFormatVersion: 2,
               publicApiSha256: $publicApiSha256
-            }'
+            }' \
             > artifacts/release/release-manifest.json
 
           {
@@ -451,13 +451,13 @@ jobs:
 
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
-            gh release edit "$tag"
-              --title "$title"
+            gh release edit "$tag" \
+              --title "$title" \
               --notes-file artifacts/release/RELEASE_NOTES.md
           else
-            gh release create "$tag" "${assets[@]}"
-              --verify-tag
-              --title "$title"
+            gh release create "$tag" "${assets[@]}" \
+              --verify-tag \
+              --title "$title" \
               --notes-file artifacts/release/RELEASE_NOTES.md
           fi
 

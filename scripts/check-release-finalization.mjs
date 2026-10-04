@@ -36,6 +36,8 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
     '"Mayordomo.Core.$PACKAGE_VERSION.snupkg"',
     '"SHA256SUMS.txt"',
     '"core-benchmark.json"',
+    'required_assets=(',
+    'for expected in "${required_assets[@]}"; do',
   ];
 
   for (const fragment of requiredWorkflowFragments) {

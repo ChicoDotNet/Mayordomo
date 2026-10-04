@@ -1438,6 +1438,11 @@ module ReleaseContract =
             errors.Add(
                 "Release workflow must use F# Mayordomo.Tooling instead of JavaScript CI scripts.")
 
+        let releaseCandidateIndex =
+            workflow.IndexOf(
+                "\n  release-candidate:",
+                StringComparison.Ordinal)
+
         let publishIndex =
             workflow.IndexOf(
                 "\n  publish:",
@@ -1449,13 +1454,76 @@ module ReleaseContract =
                 StringComparison.Ordinal)
 
         if
-            publishIndex < 0
+            releaseCandidateIndex < 0
+            || publishIndex < 0
             || finalizeIndex < 0
+            || publishIndex <= releaseCandidateIndex
             || finalizeIndex <= publishIndex
         then
             errors.Add(
-                "Finalization job must exist after the NuGet publish job.")
+                "Release candidate, publish, and finalization jobs must exist in that order.")
         else
+            let candidateBlock =
+                workflow.Substring(
+                    releaseCandidateIndex,
+                    publishIndex - releaseCandidateIndex)
+
+            let dispatchOnlyCandidateSteps =
+                [
+                    "Restore engine tests"
+                    "Build exact release assembly and engine tests"
+                    "Enforce engine footprint"
+                    "Test engine"
+                    "Pack exact release artifacts"
+                    "Verify package and symbol artifacts"
+                    "Audit NuGet package contract"
+                    "Smoke test installed package"
+                    "Restore benchmark harness"
+                    "Build benchmark harness"
+                    "Run measured performance suite"
+                    "Upload certified release candidate"
+                ]
+
+            for stepName in dispatchOnlyCandidateSteps do
+                let marker =
+                    $"- name: {stepName}"
+
+                let stepIndex =
+                    candidateBlock.IndexOf(
+                        marker,
+                        StringComparison.Ordinal)
+
+                if stepIndex < 0 then
+                    errors.Add(
+                        $"Release candidate is missing required step: {stepName}")
+                else
+                    let nextStepIndex =
+                        candidateBlock.IndexOf(
+                            "\n      - name:",
+                            stepIndex + marker.Length,
+                            StringComparison.Ordinal)
+
+                    let stepEnd =
+                        if nextStepIndex < 0 then
+                            candidateBlock.Length
+                        else
+                            nextStepIndex
+
+                    let stepBlock =
+                        candidateBlock.Substring(
+                            stepIndex,
+                            stepEnd - stepIndex)
+
+                    if
+                        not (
+                            stepBlock.Contains(
+                                "if: github.event_name == 'workflow_dispatch'",
+                                StringComparison.Ordinal)
+                        )
+                    then
+                        errors.Add(
+                            $"Release candidate step '{stepName}' must run only on workflow_dispatch.")
+
             let publishBlock =
                 workflow.Substring(
                     publishIndex,

@@ -240,6 +240,42 @@ jobs:
       - run: dotnet "$TOOLING_DLL" package-audit
       - run: dotnet "$TOOLING_DLL" consumer-smoke
       - run: dotnet "$TOOLING_DLL" benchmark-budget
+      - name: Restore engine tests
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Build exact release assembly and engine tests
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Enforce engine footprint
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Test engine
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Pack exact release artifacts
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Verify package and symbol artifacts
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Audit NuGet package contract
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Smoke test installed package
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Restore benchmark harness
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Build benchmark harness
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Run measured performance suite
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Upload certified release candidate
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
   publish:
     permissions:
       contents: read
@@ -351,6 +387,27 @@ release-manifest.json"""
             |> List.exists (fun error ->
                 error.Contains(
                     "manual build_number")))
+
+    [<Fact>]
+    let requires_full_candidate_steps_to_be_dispatch_only () =
+        let workflow =
+            validWorkflow.Replace(
+                "- name: Restore engine tests\n        if: github.event_name == 'workflow_dispatch'\n",
+                "- name: Restore engine tests\n")
+
+        let errors =
+            ReleaseContract.validate
+                workflow
+                changelog
+                releasing
+
+        Assert.True(
+            errors
+            |> List.exists (fun error ->
+                error.Contains(
+                    "Restore engine tests")
+                && error.Contains(
+                    "workflow_dispatch")))
 
     [<Fact>]
     let requires_repairable_release_path () =

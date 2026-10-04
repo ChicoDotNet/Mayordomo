@@ -3,6 +3,8 @@
     <AssemblyName>Mayordomo.Core</AssemblyName>
     <RootNamespace>Mayordomo</RootNamespace>
     <Description>Authoritative reusable board-game contracts and Mayordomo platform primitives.</Description>
+    <PackageId>Mayordomo.Core</PackageId>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 </Project>

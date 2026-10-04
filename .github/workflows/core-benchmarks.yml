@@ -8,6 +8,7 @@ on:
     paths:
       - 'src/Mayordomo.Core/**'
       - 'benchmarks/Mayordomo.Core.Benchmarks/**'
+      - 'scripts/check-benchmark-budget*.mjs'
       - 'global.json'
       - '.github/workflows/core-benchmarks.yml'
   workflow_dispatch:
@@ -35,6 +36,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Verify benchmark budget checker
+        run: node --test scripts/check-benchmark-budget.test.mjs
+
       - name: Restore benchmark harness
         run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
 
@@ -60,3 +64,6 @@ jobs:
             cat artifacts/core-benchmark.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce benchmark hard ceilings
+        run: node scripts/check-benchmark-budget.mjs artifacts/core-benchmark.json

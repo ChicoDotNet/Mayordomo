@@ -12,6 +12,12 @@ internal static class Program
   private const int DefaultIterations = 10000;
   private const int DefaultWarmupIterations = 1000;
 
+  private static readonly JsonSerializerOptions SerializerOptions = new()
+  {
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = true
+  };
+
   public static void Main()
   {
     var iterations = ReadPositiveInt(
@@ -101,12 +107,7 @@ internal static class Program
 
     var json = JsonSerializer.Serialize(
       report,
-      new JsonSerializerOptions
-      {
-        PropertyNamingPolicy =
-          JsonNamingPolicy.CamelCase,
-        WriteIndented = true
-      });
+      SerializerOptions);
 
     Console.WriteLine(json);
   }

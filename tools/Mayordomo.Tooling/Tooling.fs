@@ -1370,13 +1370,13 @@ module ReleaseContract =
 
         let requiredWorkflowFragments =
             [
-                "Mayordomo.Tooling.dll release-version"
-                "Mayordomo.Tooling.dll release-contract"
-                "Mayordomo.Tooling.dll public-readiness"
-                "Mayordomo.Tooling.dll engine-budget"
-                "Mayordomo.Tooling.dll package-audit"
-                "Mayordomo.Tooling.dll consumer-smoke"
-                "Mayordomo.Tooling.dll benchmark-budget"
+                "\"$TOOLING_DLL\" release-version"
+                "\"$TOOLING_DLL\" release-contract"
+                "\"$TOOLING_DLL\" public-readiness"
+                "\"$TOOLING_DLL\" engine-budget"
+                "\"$TOOLING_DLL\" package-audit"
+                "\"$TOOLING_DLL\" consumer-smoke"
+                "\"$TOOLING_DLL\" benchmark-budget"
                 "source-sha: ${{ steps.version.outputs.source_sha }}"
                 "finalize-release:"
                 "if: github.event_name == 'workflow_dispatch' && inputs.publish"

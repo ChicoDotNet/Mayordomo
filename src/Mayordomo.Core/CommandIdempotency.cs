@@ -128,8 +128,8 @@ internal static class CommandFingerprint
         HashDeckCreated(matchId, created),
       DeckItemDrawnEvent drawn =>
         Hash("draw-deck-item", matchId.Value, drawn.DeckId.Value),
-      TurnStartedEvent started =>
-        Hash("start-turn", matchId.Value, started.ParticipantId.Value, started.PhaseId.Value),
+      TurnStartedEvent turnStarted =>
+        Hash("start-turn", matchId.Value, turnStarted.ParticipantId.Value, turnStarted.PhaseId.Value),
       TurnPhaseChangedEvent changed =>
         Hash("change-turn-phase", matchId.Value, changed.ParticipantId.Value, changed.PhaseId.Value),
       RandomIntGeneratedEvent generated =>

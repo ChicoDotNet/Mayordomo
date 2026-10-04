@@ -33,6 +33,10 @@ on:
         description: Exact nuget.org profile name authorized by Trusted Publishing.
         required: false
         type: string
+      build_number:
+        description: Optional release build number override for pre-publish recovery; defaults to the workflow run number.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -82,7 +86,16 @@ jobs:
           fi
 
           release_date="$(TZ=America/Mexico_City date +%Y%m%d)"
-          build_number="$GITHUB_RUN_NUMBER"
+          build_number="${{ inputs.build_number }}"
+
+          if [[ -z "$build_number" ]]; then
+            build_number="$GITHUB_RUN_NUMBER"
+          fi
+
+          if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build_number must be a positive integer when supplied."
+            exit 1
+          fi
 
           version_json="$(
             node scripts/compute-release-version.mjs               1               0               "$release_date"               "$build_number"               "$SOURCE_SHA"
@@ -123,6 +136,8 @@ jobs:
             echo "- FileVersion: `$file_version`"
             echo "- InformationalVersion: `$informational_version`"
             echo "- Source SHA: `$SOURCE_SHA`"
+            echo "- Workflow run: `$GITHUB_RUN_NUMBER`"
+            echo "- Release build: `$build_number`"
             echo "- Publish requested: `${PUBLISH_REQUESTED:-false}`"
           } >> "$GITHUB_STEP_SUMMARY"
 

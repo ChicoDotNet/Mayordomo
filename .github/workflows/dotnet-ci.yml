@@ -64,24 +64,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore
-        run: dotnet restore Mayordomo.slnx
-
-      - name: Build and test Core and tooling in parallel
+      - name: Restore Core and tooling in parallel
         shell: bash
         run: |
           set -uo pipefail
 
-          dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-restore &
+          dotnet restore tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj &
           core_pid=$!
 
-          dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj             --configuration Release             --no-restore &
+          dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj &
           tooling_pid=$!
 
           status=0
           wait "$core_pid" || status=1
           wait "$tooling_pid" || status=1
           exit "$status"
+
+      - name: Build Core and tooling in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          dotnet build tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-restore &
+          core_pid=$!
+
+          dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj             --configuration Release             --no-restore &
+          tooling_pid=$!
+
+          status=0
+          wait "$core_pid" || status=1
+          wait "$tooling_pid" || status=1
+          exit "$status"
+
+      - name: Test Core
+        run: dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj --configuration Release --no-build
 
       - name: Validate working branch
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'

@@ -8,7 +8,8 @@ on:
     paths:
       - 'src/Mayordomo.Core/**'
       - 'benchmarks/Mayordomo.Core.Benchmarks/**'
-      - 'scripts/check-benchmark-budget*.mjs'
+      - 'tools/Mayordomo.Tooling/**'
+      - 'tools/Mayordomo.Tooling.Tests/**'
       - 'global.json'
       - '.github/workflows/core-benchmarks.yml'
   workflow_dispatch:
@@ -26,6 +27,7 @@ jobs:
       MAYORDOMO_BENCHMARK_ITERATIONS: '10000'
       MAYORDOMO_BENCHMARK_WARMUP: '1000'
       MAYORDOMO_BENCHMARK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
 
     steps:
       - uses: actions/checkout@v7
@@ -36,8 +38,14 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Verify benchmark budget checker
-        run: node --test scripts/check-benchmark-budget.test.mjs
+      - name: Restore F# tooling
+        run: dotnet restore tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj
+
+      - name: Build F# tooling
+        run: dotnet build tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-restore
+
+      - name: Test F# tooling
+        run: dotnet test tools/Mayordomo.Tooling.Tests/Mayordomo.Tooling.Tests.fsproj --configuration Release --no-build
 
       - name: Restore benchmark harness
         run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
@@ -60,10 +68,8 @@ jobs:
           {
             echo '## Mayordomo.Core benchmark'
             echo
-            echo '```json'
             cat artifacts/core-benchmark.json
-            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enforce benchmark hard ceilings
-        run: node scripts/check-benchmark-budget.mjs artifacts/core-benchmark.json
+        run: dotnet "$TOOLING_DLL" benchmark-budget artifacts/core-benchmark.json

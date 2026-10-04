@@ -110,6 +110,57 @@ public sealed record MoveParticipantCommand
   }
 }
 
+public sealed record RelocateParticipantCommand
+{
+  private RelocateParticipantCommand(
+    CommandId commandId,
+    MatchId matchId,
+    Revision expectedRevision,
+    ParticipantId participantId,
+    PositionId toPositionId)
+  {
+    CommandId = commandId;
+    MatchId = matchId;
+    ExpectedRevision = expectedRevision;
+    ParticipantId = participantId;
+    ToPositionId = toPositionId;
+  }
+
+  public CommandId CommandId { get; }
+
+  public MatchId MatchId { get; }
+
+  public Revision ExpectedRevision { get; }
+
+  public ParticipantId ParticipantId { get; }
+
+  public PositionId ToPositionId { get; }
+
+  public static RelocateParticipantCommand Create(
+    CommandId commandId,
+    MatchId matchId,
+    Revision expectedRevision,
+    ParticipantId participantId,
+    PositionId toPositionId)
+  {
+    return new RelocateParticipantCommand(
+      commandId,
+      matchId,
+      expectedRevision,
+      participantId,
+      toPositionId);
+  }
+}
+
+public sealed record ParticipantRelocatedEvent(
+  CommandId CommandId,
+  MatchId MatchId,
+  Revision Revision,
+  ParticipantId ParticipantId,
+  PositionId FromPositionId,
+  PositionId ToPositionId)
+  : MatchEvent(CommandId, MatchId, Revision);
+
 public sealed record ParticipantPlacedEvent(
   CommandId CommandId,
   MatchId MatchId,

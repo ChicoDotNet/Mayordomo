@@ -24,7 +24,7 @@ module Internal =
     let readText relativePath =
         File.ReadAllText(fullPath relativePath)
 
-    let printErrors header (errors: string list) =
+    let printErrors (header: string) (errors: string list) =
         Console.Error.WriteLine(header)
         errors |> List.iter (fun error -> Console.Error.WriteLine($"- {error}"))
 

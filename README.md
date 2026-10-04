@@ -4,7 +4,7 @@
 
 Mayordomo Engine is an **open-source-from-day-one**, MIT-licensed, reusable, deterministic, server-authoritative board-game engine.
 
-The repository is temporarily private only while the initial public-safety bootstrap is completed. Its code, governance, contribution model, and history are maintained as open-source/public-safe from inception.
+The repository is public. Its code, governance, contribution model, and history are maintained as open-source/public-safe from inception.
 
 **Mayordomo — El juego que no es un juego** is the first real commercial product used to prove the engine, but the engine does not know that Mayordomo exists.
 
@@ -12,7 +12,17 @@ The repository is temporarily private only while the initial public-safety boots
 
 ## Status
 
-**Pre-alpha / active engine foundation.**
+**1.0 release hardening.** The public package identity is `Mayordomo.Core`; release candidates are validated from packed `.nupkg` artifacts before publication.
+
+## NuGet
+
+After the supported 1.0 release is published:
+
+```bash
+dotnet add package Mayordomo.Core
+```
+
+Package consumers receive the MIT-licensed engine assembly, package README, portable symbols through the companion `.snupkg`, and Source Link metadata for source-level debugging.
 
 ## Why this engine exists
 

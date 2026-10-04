@@ -51,6 +51,7 @@ jobs:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PUBLISH_REQUESTED: ${{ inputs.publish }}
       TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
+      # NuGet package caching is intentionally disabled here: CI-I03 measured slower candidate runs.
 
     steps:
       - name: Checkout exact candidate source

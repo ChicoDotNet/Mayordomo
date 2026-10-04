@@ -139,10 +139,10 @@ module ReleaseVersionTests =
                 versions)
 
 module BenchmarkBudgetTests =
-    let private budgets =
+    let private budgets: BenchmarkBudget.Budget list =
         [
             {
-                BenchmarkBudget.Name =
+                Name =
                     "canonical-state-hash"
                 MaxMicrosecondsPerOperation =
                     100.0
@@ -150,7 +150,7 @@ module BenchmarkBudgetTests =
                     1000.0
             }
             {
-                BenchmarkBudget.Name =
+                Name =
                     "event-replay"
                 MaxMicrosecondsPerOperation =
                     1000.0

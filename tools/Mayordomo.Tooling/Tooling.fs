@@ -60,14 +60,14 @@ module ProcessRunner =
         startInfo.UseShellExecute <- false
         arguments |> List.iter (fun argument -> startInfo.ArgumentList.Add(argument))
 
-        use process = new Process()
-        process.StartInfo <- startInfo
+        use childProcess = new Process()
+        childProcess.StartInfo <- startInfo
 
-        if not (process.Start()) then
+        if not (childProcess.Start()) then
             invalidOp $"Unable to start process '{executable}'."
 
-        process.WaitForExit()
-        process.ExitCode
+        childProcess.WaitForExit()
+        childProcess.ExitCode
 
 module BranchPolicy =
     let private allowed =
@@ -517,8 +517,11 @@ module EngineBudget =
             let mutable exitCode = 0
 
             if not packageReferences.IsEmpty then
+                let packageReferenceText =
+                    String.Join(", ", packageReferences)
+
                 Console.Error.WriteLine(
-                    $"ENGINE BUDGET CHECK FAILED: Mayordomo.Core must have zero mandatory third-party runtime PackageReferences. Found: {String.Join(", ", packageReferences)}")
+                    $"ENGINE BUDGET CHECK FAILED: Mayordomo.Core must have zero mandatory third-party runtime PackageReferences. Found: {packageReferenceText}")
                 exitCode <- 1
 
             if bytes > hardCeilingBytes then
@@ -753,12 +756,10 @@ module PublicReadiness =
         let srcRoot = Internal.fullPath("src")
 
         if Directory.Exists(srcRoot) then
-            for sourcePath in
-                Directory.EnumerateFiles(
-                    srcRoot,
-                    "*",
-                    SearchOption.AllDirectories)
-            do
+            for sourcePath in Directory.EnumerateFiles(
+                srcRoot,
+                "*",
+                SearchOption.AllDirectories) do
                 let extension =
                     Path.GetExtension(sourcePath).ToLowerInvariant()
 
@@ -909,8 +910,11 @@ module PackageAudit =
                 message
                 =
                 if not (List.contains expected entries) then
+                    let entriesText =
+                        String.Join(", ", entries)
+
                     errors.Add(
-                        $"{message} Archive entries: {String.Join(", ", entries)}")
+                        $"{message} Archive entries: {entriesText}")
 
             requireEntry
                 packageEntries

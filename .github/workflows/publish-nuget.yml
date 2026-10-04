@@ -269,6 +269,13 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout certified source metadata
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-candidate.outputs.source-sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json

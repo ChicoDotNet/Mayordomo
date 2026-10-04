@@ -276,7 +276,7 @@ public sealed class PropertyFuzzTests
         PositionId.Create(
           $"relocate-{scenario:D3}-{step:D3}")),
 
-      _ => CreateDeckCommand(
+      _ => CreateDrawOrRandomCommand(
         state,
         commandId)
     };
@@ -316,7 +316,7 @@ public sealed class PropertyFuzzTests
       item);
   }
 
-  private static object CreateDeckCommand(
+  private static object CreateDrawOrRandomCommand(
     MatchState state,
     CommandId commandId)
   {

@@ -5,7 +5,7 @@ namespace Mayordomo.Core.Tests;
 public sealed class CanonicalStateHashTests
 {
   [Fact]
-  public void Initial_state_has_stable_v1_sha256_golden_hash()
+  public void Initial_state_has_stable_v2_sha256_golden_hash()
   {
     var state = MatchState.Create(
       MatchId.Create("match-001"),
@@ -13,11 +13,8 @@ public sealed class CanonicalStateHashTests
 
     var hash = MatchStateHasher.Compute(state);
 
-    Assert.Equal(
-      "BF9CE14E8D90F44E02A4FA318C1E49A3981EE8173424387835E91AB5BFA4DA19",
-      hash.Value);
-    Assert.Equal("SHA-256", MatchStateHasher.Algorithm);
-    Assert.Equal(1, MatchStateHasher.FormatVersion);
+    Assert.Fail(
+      $"STATE_HASH_V2_CAPTURE={hash.Value}");
   }
 
   [Fact]
@@ -160,20 +157,19 @@ public sealed class CanonicalStateHashTests
       };
 
     var current = secondJoin.State;
-    var commandNumber = 1;
 
     foreach (var placement in placementOrder)
     {
       current = MatchEngine.Execute(
         current,
         PlaceParticipantCommand.Create(
-          CommandId.Create($"place-{commandNumber}"),
+          CommandId.Create(
+            $"place-{placement.Item1.Value}"),
           initial.MatchId,
           current.Revision,
           placement.Item1,
           placement.Item2)).State;
 
-      commandNumber++;
     }
 
     return current;

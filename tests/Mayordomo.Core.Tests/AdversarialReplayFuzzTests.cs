@@ -301,7 +301,7 @@ public sealed class AdversarialReplayFuzzTests
     where TEvent : MatchEvent
   {
     for (var index = 0;
-         index < events.Count;
+         index < events.Length;
          index++)
     {
       if (events[index] is TEvent)

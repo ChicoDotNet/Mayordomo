@@ -2,237 +2,218 @@ using Xunit;
 
 namespace Mayordomo.Core.Tests;
 
-public sealed class GoldenReplayCaptureTests
+public sealed class GoldenReplayTests
 {
+  private const string ExpectedHash =
+    "C42C907ADF327C4B48616106B3220B179C5182F10E4243D8CCB4C6361378522F";
+
   [Fact]
-  public void Capture_v1_golden_event_history_and_final_hash()
+  public void V1_persisted_history_replays_to_the_frozen_canonical_state()
   {
-    var initial = MatchState.Create(
-      MatchId.Create("golden-v1"),
-      randomSeed: 424242UL);
-    var current = initial;
-    var history = new List<MatchEvent>();
+    var matchId = MatchId.Create("golden-v1");
     var participantA = ParticipantId.Create("participant-a");
     var participantB = ParticipantId.Create("participant-b");
     var mainPhase = PhaseId.Create("phase-main");
+    var initial = MatchState.Create(
+      matchId,
+      randomSeed: 424242UL);
 
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        JoinParticipantCommand.Create(
-          CommandId.Create("join-a"),
-          current.MatchId,
-          current.Revision,
-          participantA)));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        JoinParticipantCommand.Create(
-          CommandId.Create("join-b"),
-          current.MatchId,
-          current.Revision,
-          participantB)));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        PlaceParticipantCommand.Create(
-          CommandId.Create("place-a"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          PositionId.Create("position-a"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        PlaceParticipantCommand.Create(
-          CommandId.Create("place-b"),
-          current.MatchId,
-          current.Revision,
-          participantB,
-          PositionId.Create("position-b"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        GrantParticipantItemCommand.Create(
-          CommandId.Create("grant-a"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          ParticipantItemId.Create("item-a"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        CreateDeckCommand.Create(
-          CommandId.Create("deck-create"),
-          current.MatchId,
-          current.Revision,
-          DeckId.Create("deck-main"),
-          [
-            DeckItemId.Create("card-01"),
-            DeckItemId.Create("card-02"),
-            DeckItemId.Create("card-03"),
-            DeckItemId.Create("card-04"),
-            DeckItemId.Create("card-05")
-          ])));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        StartTurnCommand.Create(
-          CommandId.Create("turn-start"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          mainPhase)));
-
-    var randomTransition = MatchEngine.Execute(
-      current,
-      GenerateRandomIntCommand.Create(
+    MatchEvent[] history =
+    [
+      new ParticipantJoinedEvent(
+        CommandId.Create("join-a"),
+        matchId,
+        Revision.Create(1),
+        participantA),
+      new ParticipantJoinedEvent(
+        CommandId.Create("join-b"),
+        matchId,
+        Revision.Create(2),
+        participantB),
+      new ParticipantPlacedEvent(
+        CommandId.Create("place-a"),
+        matchId,
+        Revision.Create(3),
+        participantA,
+        PositionId.Create("position-a")),
+      new ParticipantPlacedEvent(
+        CommandId.Create("place-b"),
+        matchId,
+        Revision.Create(4),
+        participantB,
+        PositionId.Create("position-b")),
+      new ParticipantItemGrantedEvent(
+        CommandId.Create("grant-a"),
+        matchId,
+        Revision.Create(5),
+        participantA,
+        ParticipantItemId.Create("item-a")),
+      new DeckCreatedEvent(
+        CommandId.Create("deck-create"),
+        matchId,
+        Revision.Create(6),
+        DeckId.Create("deck-main"),
+        [
+          DeckItemId.Create("card-01"),
+          DeckItemId.Create("card-02"),
+          DeckItemId.Create("card-03"),
+          DeckItemId.Create("card-04"),
+          DeckItemId.Create("card-05")
+        ]),
+      new TurnStartedEvent(
+        CommandId.Create("turn-start"),
+        matchId,
+        Revision.Create(7),
+        participantA,
+        mainPhase),
+      new RandomIntGeneratedEvent(
         CommandId.Create("random-1"),
-        current.MatchId,
-        current.Revision,
-        minInclusive: 1,
-        maxExclusive: 7));
-    var randomEvent = Assert.IsType<RandomIntGeneratedEvent>(
-      Assert.Single(randomTransition.Events));
-    current = Apply(history, randomTransition);
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        MoveParticipantCommand.Create(
-          CommandId.Create("move-a"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          PositionId.Create("position-a-moved"),
-          randomEvent.Value)));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        DrawDeckItemCommand.Create(
-          CommandId.Create("draw-1"),
-          current.MatchId,
-          current.Revision,
-          DeckId.Create("deck-main"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        ChangeTurnPhaseCommand.Create(
-          CommandId.Create("phase-change"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          PhaseId.Create("phase-resolve"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        EndTurnCommand.Create(
-          CommandId.Create("turn-end"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          mainPhase)));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        RevokeParticipantItemCommand.Create(
-          CommandId.Create("revoke-a"),
-          current.MatchId,
-          current.Revision,
-          participantA,
-          ParticipantItemId.Create("item-a"))));
-
-    current = Apply(
-      history,
-      MatchEngine.Execute(
-        current,
-        RelocateParticipantCommand.Create(
-          CommandId.Create("relocate-b"),
-          current.MatchId,
-          current.Revision,
-          participantB,
-          PositionId.Create("position-b-relocated"))));
+        matchId,
+        Revision.Create(8),
+        MinInclusive: 1,
+        MaxExclusive: 7,
+        Value: 2,
+        RandomStateAfter: new RandomState(11400714819323622727UL)),
+      new ParticipantMovedEvent(
+        CommandId.Create("move-a"),
+        matchId,
+        Revision.Create(9),
+        participantA,
+        PositionId.Create("position-a"),
+        PositionId.Create("position-a-moved"),
+        Distance: 2),
+      new DeckItemDrawnEvent(
+        CommandId.Create("draw-1"),
+        matchId,
+        Revision.Create(10),
+        DeckId.Create("deck-main"),
+        DeckItemId.Create("card-01"),
+        new RandomState(4354685564937269596UL)),
+      new TurnPhaseChangedEvent(
+        CommandId.Create("phase-change"),
+        matchId,
+        Revision.Create(11),
+        participantA,
+        mainPhase,
+        PhaseId.Create("phase-resolve")),
+      new TurnEndedEvent(
+        CommandId.Create("turn-end"),
+        matchId,
+        Revision.Create(12),
+        participantA),
+      new TurnStartedEvent(
+        CommandId.Create("turn-end"),
+        matchId,
+        Revision.Create(13),
+        participantB,
+        mainPhase),
+      new ParticipantItemRevokedEvent(
+        CommandId.Create("revoke-a"),
+        matchId,
+        Revision.Create(14),
+        participantA,
+        ParticipantItemId.Create("item-a")),
+      new ParticipantRelocatedEvent(
+        CommandId.Create("relocate-b"),
+        matchId,
+        Revision.Create(15),
+        participantB,
+        PositionId.Create("position-b"),
+        PositionId.Create("position-b-relocated"))
+    ];
 
     var replayed = MatchEngine.Reduce(
       initial,
       history);
-    var finalHash = MatchStateHasher.Compute(current);
-    var replayHash = MatchStateHasher.Compute(replayed);
 
-    Assert.Equal(finalHash, replayHash);
+    Assert.Equal(
+      Revision.Create(15),
+      replayed.Revision);
+    Assert.Equal(
+      ExpectedHash,
+      MatchStateHasher.Compute(replayed).Value);
+
+    var validation =
+      MatchInvariantValidator.Validate(replayed);
+
     Assert.True(
-      MatchInvariantValidator.Validate(current).IsValid);
-    Assert.True(
-      MatchInvariantValidator.Validate(replayed).IsValid);
-
-    var snapshot = string.Join(
-      "\n",
-      history.Select(Signature));
-
-    Assert.Fail(
-      $"GOLDEN_CAPTURE_V1\nHASH={finalHash.Value}\nREVISION={current.Revision.Value}\nEVENTS\n{snapshot}");
+      validation.IsValid,
+      string.Join(
+        " | ",
+        validation.Violations.Select(
+          violation =>
+            $"{violation.Code}:{violation.Subject}")));
   }
 
-  private static MatchState Apply(
-    List<MatchEvent> history,
-    MatchTransition transition)
+  [Fact]
+  public void V1_golden_history_rejects_deterministic_random_tampering()
   {
-    history.AddRange(transition.Events);
-    return transition.State;
-  }
+    var matchId = MatchId.Create("golden-v1");
+    var initial = MatchState.Create(
+      matchId,
+      randomSeed: 424242UL);
 
-  private static string Signature(MatchEvent domainEvent)
-  {
-    return domainEvent switch
-    {
-      ParticipantJoinedEvent joined =>
-        $"ParticipantJoined|{joined.CommandId.Value}|{joined.Revision.Value}|{joined.ParticipantId.Value}",
-      ParticipantPlacedEvent placed =>
-        $"ParticipantPlaced|{placed.CommandId.Value}|{placed.Revision.Value}|{placed.ParticipantId.Value}|{placed.PositionId.Value}",
-      ParticipantMovedEvent moved =>
-        $"ParticipantMoved|{moved.CommandId.Value}|{moved.Revision.Value}|{moved.ParticipantId.Value}|{moved.FromPositionId.Value}|{moved.ToPositionId.Value}|{moved.Distance}",
-      ParticipantRelocatedEvent relocated =>
-        $"ParticipantRelocated|{relocated.CommandId.Value}|{relocated.Revision.Value}|{relocated.ParticipantId.Value}|{relocated.FromPositionId.Value}|{relocated.ToPositionId.Value}",
-      ParticipantItemGrantedEvent granted =>
-        $"ParticipantItemGranted|{granted.CommandId.Value}|{granted.Revision.Value}|{granted.ParticipantId.Value}|{granted.ItemId.Value}",
-      ParticipantItemRevokedEvent revoked =>
-        $"ParticipantItemRevoked|{revoked.CommandId.Value}|{revoked.Revision.Value}|{revoked.ParticipantId.Value}|{revoked.ItemId.Value}",
-      DeckCreatedEvent created =>
-        $"DeckCreated|{created.CommandId.Value}|{created.Revision.Value}|{created.DeckId.Value}|{string.Join(',', created.Items.Select(item => item.Value))}",
-      DeckItemDrawnEvent drawn =>
-        $"DeckItemDrawn|{drawn.CommandId.Value}|{drawn.Revision.Value}|{drawn.DeckId.Value}|{drawn.ItemId.Value}|{drawn.RandomStateAfter.Value}",
-      TurnStartedEvent started =>
-        $"TurnStarted|{started.CommandId.Value}|{started.Revision.Value}|{started.ParticipantId.Value}|{started.PhaseId.Value}",
-      TurnEndedEvent ended =>
-        $"TurnEnded|{ended.CommandId.Value}|{ended.Revision.Value}|{ended.ParticipantId.Value}",
-      TurnPhaseChangedEvent changed =>
-        $"TurnPhaseChanged|{changed.CommandId.Value}|{changed.Revision.Value}|{changed.ParticipantId.Value}|{changed.PreviousPhaseId.Value}|{changed.PhaseId.Value}",
-      RandomIntGeneratedEvent generated =>
-        $"RandomIntGenerated|{generated.CommandId.Value}|{generated.Revision.Value}|{generated.MinInclusive}|{generated.MaxExclusive}|{generated.Value}|{generated.RandomStateAfter.Value}",
-      _ => throw new InvalidOperationException(
-        $"Unsupported golden event '{domainEvent.GetType().Name}'.")
-    };
+    MatchEvent[] prefix =
+    [
+      new ParticipantJoinedEvent(
+        CommandId.Create("join-a"),
+        matchId,
+        Revision.Create(1),
+        ParticipantId.Create("participant-a")),
+      new ParticipantJoinedEvent(
+        CommandId.Create("join-b"),
+        matchId,
+        Revision.Create(2),
+        ParticipantId.Create("participant-b")),
+      new ParticipantPlacedEvent(
+        CommandId.Create("place-a"),
+        matchId,
+        Revision.Create(3),
+        ParticipantId.Create("participant-a"),
+        PositionId.Create("position-a")),
+      new ParticipantPlacedEvent(
+        CommandId.Create("place-b"),
+        matchId,
+        Revision.Create(4),
+        ParticipantId.Create("participant-b"),
+        PositionId.Create("position-b")),
+      new ParticipantItemGrantedEvent(
+        CommandId.Create("grant-a"),
+        matchId,
+        Revision.Create(5),
+        ParticipantId.Create("participant-a"),
+        ParticipantItemId.Create("item-a")),
+      new DeckCreatedEvent(
+        CommandId.Create("deck-create"),
+        matchId,
+        Revision.Create(6),
+        DeckId.Create("deck-main"),
+        [
+          DeckItemId.Create("card-01"),
+          DeckItemId.Create("card-02"),
+          DeckItemId.Create("card-03"),
+          DeckItemId.Create("card-04"),
+          DeckItemId.Create("card-05")
+        ]),
+      new TurnStartedEvent(
+        CommandId.Create("turn-start"),
+        matchId,
+        Revision.Create(7),
+        ParticipantId.Create("participant-a"),
+        PhaseId.Create("phase-main")),
+      new RandomIntGeneratedEvent(
+        CommandId.Create("random-1"),
+        matchId,
+        Revision.Create(8),
+        MinInclusive: 1,
+        MaxExclusive: 7,
+        Value: 3,
+        RandomStateAfter: new RandomState(11400714819323622727UL))
+    ];
+
+    Assert.Throws<InvalidOperationException>(
+      () => MatchEngine.Reduce(
+        initial,
+        prefix));
   }
 }

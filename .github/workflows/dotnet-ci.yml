@@ -64,18 +64,44 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore
-        run: dotnet restore Mayordomo.slnx
+      - name: Restore Core and tooling in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
 
-      - name: Build
-        run: dotnet build Mayordomo.slnx --configuration Release --no-restore
+          dotnet restore tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj &
+          core_pid=$!
+
+          dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj &
+          tooling_pid=$!
+
+          status=0
+          wait "$core_pid" || status=1
+          wait "$tooling_pid" || status=1
+          exit "$status"
+
+      - name: Build Core and tooling in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          dotnet build tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj             --configuration Release             --no-restore &
+          core_pid=$!
+
+          dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj             --configuration Release             --no-restore &
+          tooling_pid=$!
+
+          status=0
+          wait "$core_pid" || status=1
+          wait "$tooling_pid" || status=1
+          exit "$status"
+
+      - name: Test Core
+        run: dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj --configuration Release --no-build
 
       - name: Validate working branch
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
         run: dotnet "$TOOLING_DLL" branch-name "$GITHUB_HEAD_REF"
-
-      - name: Test
-        run: dotnet test Mayordomo.slnx --configuration Release --no-build
 
       - name: Enforce engine footprint
         run: dotnet "$TOOLING_DLL" engine-budget

@@ -14,6 +14,7 @@ on:
       - 'scripts/check-benchmark-budget*.mjs'
       - 'scripts/compute-release-version*.mjs'
       - 'scripts/test-package-consumer.mjs'
+      - 'scripts/audit-nuget-package.mjs'
       - 'README.md'
       - 'Directory.Build.props'
       - 'global.json'
@@ -171,6 +172,13 @@ jobs:
 
           sha256sum "$package" "$symbols" |
             tee artifacts/nuget/SHA256SUMS.txt
+
+      - name: Audit NuGet package contract
+        run: >
+          node scripts/audit-nuget-package.mjs
+          artifacts/nuget
+          "$PACKAGE_VERSION"
+          "$SOURCE_SHA"
 
       - name: Smoke test installed package
         run: >

@@ -88,6 +88,7 @@ public sealed class MatchState
     Revision revision,
     IEnumerable<ParticipantId> participants,
     IEnumerable<KeyValuePair<ParticipantId, PositionId>> positions,
+    IEnumerable<KeyValuePair<ParticipantId, IReadOnlyList<ParticipantItemId>>> heldItems,
     IEnumerable<KeyValuePair<DeckId, DeckState>> decks,
     TurnState? turn,
     RandomState randomState)
@@ -97,6 +98,11 @@ public sealed class MatchState
     Participants = new ReadOnlyCollection<ParticipantId>([.. participants]);
     Positions = new ReadOnlyDictionary<ParticipantId, PositionId>(
       positions.ToDictionary(entry => entry.Key, entry => entry.Value));
+    HeldItems = new ReadOnlyDictionary<ParticipantId, IReadOnlyList<ParticipantItemId>>(
+      heldItems.ToDictionary(
+        entry => entry.Key,
+        entry => (IReadOnlyList<ParticipantItemId>)
+          new ReadOnlyCollection<ParticipantItemId>([.. entry.Value])));
     Decks = new ReadOnlyDictionary<DeckId, DeckState>(
       decks.ToDictionary(entry => entry.Key, entry => entry.Value));
     Turn = turn;
@@ -110,6 +116,8 @@ public sealed class MatchState
   public IReadOnlyList<ParticipantId> Participants { get; }
 
   public IReadOnlyDictionary<ParticipantId, PositionId> Positions { get; }
+
+  public IReadOnlyDictionary<ParticipantId, IReadOnlyList<ParticipantItemId>> HeldItems { get; }
 
   public IReadOnlyDictionary<DeckId, DeckState> Decks { get; }
 
@@ -132,6 +140,7 @@ public sealed class MatchState
       [],
       [],
       [],
+      [],
       null,
       new RandomState(randomSeed));
   }
@@ -146,11 +155,20 @@ public sealed class MatchState
         $"Participant '{participantId}' is already part of match '{MatchId}'.");
     }
 
+    var heldItems = HeldItems.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    heldItems.Add(
+      participantId,
+      Array.Empty<ParticipantItemId>());
+
     return new MatchState(
       MatchId,
       revision,
       Participants.Append(participantId),
       Positions,
+      heldItems,
       Decks,
       Turn,
       RandomState);
@@ -178,6 +196,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       Decks,
       new TurnState(participantId, phaseId),
       RandomState);
@@ -204,6 +223,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       Decks,
       null,
       RandomState);
@@ -238,6 +258,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       Decks,
       new TurnState(participantId, phaseId),
       RandomState);
@@ -271,6 +292,7 @@ public sealed class MatchState
       revision,
       Participants,
       positions,
+      HeldItems,
       Decks,
       Turn,
       RandomState);
@@ -305,6 +327,81 @@ public sealed class MatchState
       revision,
       Participants,
       positions,
+      HeldItems,
+      Decks,
+      Turn,
+      RandomState);
+  }
+
+  internal MatchState GrantParticipantItem(
+    ParticipantId participantId,
+    ParticipantItemId itemId,
+    Revision revision)
+  {
+    if (!Participants.Contains(participantId) ||
+        !HeldItems.TryGetValue(participantId, out var inventory))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' is not part of match '{MatchId}'.");
+    }
+
+    if (inventory.Contains(itemId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' already holds item '{itemId}'.");
+    }
+
+    var heldItems = HeldItems.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    heldItems[participantId] = inventory
+      .Append(itemId)
+      .ToArray();
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      Positions,
+      heldItems,
+      Decks,
+      Turn,
+      RandomState);
+  }
+
+  internal MatchState RevokeParticipantItem(
+    ParticipantId participantId,
+    ParticipantItemId itemId,
+    Revision revision)
+  {
+    if (!Participants.Contains(participantId) ||
+        !HeldItems.TryGetValue(participantId, out var inventory))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' is not part of match '{MatchId}'.");
+    }
+
+    if (!inventory.Contains(itemId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' does not hold item '{itemId}'.");
+    }
+
+    var heldItems = HeldItems.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    heldItems[participantId] = inventory
+      .Where(candidate => candidate != itemId)
+      .ToArray();
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      Positions,
+      heldItems,
       Decks,
       Turn,
       RandomState);
@@ -334,6 +431,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       decks,
       Turn,
       RandomState);
@@ -381,6 +479,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       decks,
       Turn,
       randomStateAfter);
@@ -410,6 +509,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       Decks,
       Turn,
       randomStateAfter);
@@ -615,6 +715,64 @@ public static class MatchEngine
         command.ParticipantId,
         fromPositionId,
         command.ToPositionId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    GrantParticipantItemCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new ParticipantItemGrantedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        command.ItemId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    RevokeParticipantItemCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new ParticipantItemRevokedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        command.ItemId)
     ];
 
     return new MatchTransition(
@@ -966,6 +1124,16 @@ public static class MatchEngine
             relocated.FromPositionId,
             relocated.ToPositionId,
             relocated.Revision),
+        ParticipantItemGrantedEvent granted =>
+          current.GrantParticipantItem(
+            granted.ParticipantId,
+            granted.ItemId,
+            granted.Revision),
+        ParticipantItemRevokedEvent revoked =>
+          current.RevokeParticipantItem(
+            revoked.ParticipantId,
+            revoked.ItemId,
+            revoked.Revision),
         DeckCreatedEvent created =>
           current.CreateDeck(
             created.DeckId,

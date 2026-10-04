@@ -15,6 +15,9 @@ on:
       - 'scripts/compute-release-version*.mjs'
       - 'scripts/test-package-consumer.mjs'
       - 'scripts/audit-nuget-package.mjs'
+      - 'scripts/check-release-finalization*.mjs'
+      - 'CHANGELOG.md'
+      - 'docs/RELEASING.md'
       - 'README.md'
       - 'Directory.Build.props'
       - 'global.json'
@@ -43,6 +46,7 @@ jobs:
     outputs:
       package-version: ${{ steps.version.outputs.package_version }}
       artifact-name: ${{ steps.version.outputs.artifact_name }}
+      source-sha: ${{ steps.version.outputs.source_sha }}
 
     env:
       DOTNET_NOLOGO: 'true'
@@ -101,6 +105,7 @@ jobs:
           {
             echo "package_version=$package_version"
             echo "artifact_name=$artifact_name"
+            echo "source_sha=$SOURCE_SHA"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -123,6 +128,11 @@ jobs:
 
       - name: Verify release-version contract
         run: node --test scripts/compute-release-version.test.mjs
+
+      - name: Verify final-release contract
+        run: |
+          node --test scripts/check-release-finalization.test.mjs
+          node scripts/check-release-finalization.mjs
 
       - name: Verify public repository readiness
         run: node scripts/check-public-readiness.mjs
@@ -290,3 +300,197 @@ jobs:
           test -f "$symbols"
 
           dotnet nuget push "$package"             --api-key "$NUGET_API_KEY"             --source https://api.nuget.org/v3/index.json
+
+  finalize-release:
+    name: Finalize immutable GitHub Release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs:
+      - release-candidate
+      - publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE_VERSION: ${{ needs.release-candidate.outputs.package-version }}
+      SOURCE_SHA: ${{ needs.release-candidate.outputs.source-sha }}
+      ARTIFACT_NAME: ${{ needs.release-candidate.outputs.artifact-name }}
+
+    steps:
+      - name: Download certified release candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: artifacts
+
+      - name: Verify certified artifacts before release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+
+          test -f "$package"
+          test -f "$symbols"
+          test -f artifacts/nuget/SHA256SUMS.txt
+          test -f artifacts/benchmarks/core-benchmark.json
+          sha256sum -c artifacts/nuget/SHA256SUMS.txt
+
+      - name: Confirm published package is visible on NuGet.org
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/$PACKAGE_VERSION/mayordomo.core.$PACKAGE_VERSION.nupkg"
+          status=""
+
+          for attempt in {1..12}; do
+            status="$(
+              curl
+                --silent
+                --show-error
+                --location
+                --output /dev/null
+                --write-out '%{http_code}'
+                "$url"
+            )"
+
+            if [[ "$status" == "200" ]]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Published package was not visible on NuGet.org; final HTTP status: $status."
+            exit 1
+          fi
+
+      - name: Create or verify immutable source tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+
+          if tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null)"; then
+            tag_sha="$(jq -r '.object.sha' <<<"$tag_json")"
+
+            if [[ "$tag_sha" != "$SOURCE_SHA" ]]; then
+              echo "::error::Tag $tag points to $tag_sha instead of certified source $SOURCE_SHA."
+              exit 1
+            fi
+          else
+            gh api
+              --method POST
+              "repos/$GITHUB_REPOSITORY/git/refs"
+              -f ref="refs/tags/$tag"
+              -f sha="$SOURCE_SHA"
+              >/dev/null
+          fi
+
+      - name: Create release manifest and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          mkdir -p artifacts/release
+
+          jq -n
+            --arg packageId "Mayordomo.Core"
+            --arg packageVersion "$PACKAGE_VERSION"
+            --arg sourceSha "$SOURCE_SHA"
+            --arg tag "$tag"
+            --arg publicApiSha256 "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A"
+            '{
+              packageId: $packageId,
+              packageVersion: $packageVersion,
+              sourceSha: $sourceSha,
+              tag: $tag,
+              stateHashFormatVersion: 2,
+              publicApiSha256: $publicApiSha256
+            }'
+            > artifacts/release/release-manifest.json
+
+          {
+            echo "# Mayordomo.Core $PACKAGE_VERSION"
+            echo
+            echo "First supported 1.0 release train package."
+            echo
+            echo "- NuGet package: Mayordomo.Core $PACKAGE_VERSION"
+            echo "- Certified source SHA: $SOURCE_SHA"
+            echo "- Immutable source tag: $tag"
+            echo "- Canonical state-hash format: v2"
+            echo "- Public API baseline SHA-256: 20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A"
+            echo
+            echo "The attached package, symbol package, package checksums, benchmark evidence, and release manifest come from the same certified release-candidate artifact."
+          } > artifacts/release/RELEASE_NOTES.md
+
+      - name: Create or repair GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          title="Mayordomo.Core $PACKAGE_VERSION"
+          package="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+          assets=(
+            "$package"
+            "$symbols"
+            "artifacts/nuget/SHA256SUMS.txt"
+            "artifacts/benchmarks/core-benchmark.json"
+            "artifacts/release/release-manifest.json"
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+            gh release edit "$tag"
+              --title "$title"
+              --notes-file artifacts/release/RELEASE_NOTES.md
+          else
+            gh release create "$tag" "${assets[@]}"
+              --verify-tag
+              --title "$title"
+              --notes-file artifacts/release/RELEASE_NOTES.md
+          fi
+
+      - name: Audit final release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="v$PACKAGE_VERSION"
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+
+          test "$tag_sha" = "$SOURCE_SHA"
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$tag"
+          test "$(jq -r '.draft' <<<"$release_json")" = "false"
+          test "$(jq -r '.prerelease' <<<"$release_json")" = "false"
+
+          asset_names="$(jq -r '.assets[].name' <<<"$release_json")"
+          for expected in
+            "Mayordomo.Core.$PACKAGE_VERSION.nupkg"
+            "Mayordomo.Core.$PACKAGE_VERSION.snupkg"
+            "SHA256SUMS.txt"
+            "core-benchmark.json"
+            "release-manifest.json";
+          do
+            grep -Fx "$expected" <<<"$asset_names" >/dev/null
+          done
+
+          {
+            echo "## Stable release finalized"
+            echo
+            echo "- PackageVersion: $PACKAGE_VERSION"
+            echo "- Source SHA: $SOURCE_SHA"
+            echo "- Tag: $tag"
+            echo "- GitHub Release: $(jq -r '.html_url' <<<"$release_json")"
+          } >> "$GITHUB_STEP_SUMMARY"

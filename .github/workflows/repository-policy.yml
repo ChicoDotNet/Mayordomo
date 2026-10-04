@@ -18,14 +18,27 @@ jobs:
   public-readiness:
     runs-on: ubuntu-latest
 
+    env:
+      TOOLING_DLL: tools/Mayordomo.Tooling/bin/Release/net10.0/Mayordomo.Tooling.dll
+
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore F# tooling
+        run: dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj
+
+      - name: Build F# tooling
+        run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
+
       - name: Validate working branch
         if: github.event_name == 'pull_request' && github.head_ref != 'main' && github.head_ref != 'dev' && github.actor != 'dependabot[bot]'
-        run: node scripts/validate-branch-name.mjs "$GITHUB_HEAD_REF"
+        run: dotnet "$TOOLING_DLL" branch-name "$GITHUB_HEAD_REF"
 
       - name: Verify public-safe engine boundary
-        run: node scripts/check-public-readiness.mjs
+        run: dotnet "$TOOLING_DLL" public-readiness

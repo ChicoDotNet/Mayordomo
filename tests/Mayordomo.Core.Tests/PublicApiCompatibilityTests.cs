@@ -16,8 +16,9 @@ public sealed class PublicApiCompatibilityTests
       SHA256.HashData(
         Encoding.UTF8.GetBytes(snapshot)));
 
-    Assert.Fail(
-      $"PUBLIC_API_SHA256_CAPTURE={hash}");
+    Assert.Equal(
+      "20B4806BBD144D2B317E701BB8EF3FED656AE9E731E1D48414D53298F199E70A",
+      hash);
   }
 
   private static string BuildSnapshot()

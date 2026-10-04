@@ -7,6 +7,11 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
   const errors = [];
 
   const requiredWorkflowFragments = [
+    'versions_url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/index.json"',
+    'latest_build="$(',
+    'next_published_build="$((latest_build + 1))"',
+    'if (( build_number < next_published_build )); then',
+    'for attempt in {1..180}; do',
     "source-sha: ${{ steps.version.outputs.source_sha }}",
     'echo "source_sha=$SOURCE_SHA"',
     "finalize-release:",
@@ -37,6 +42,12 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
     if (!workflow.includes(fragment)) {
       errors.push("Missing final-release workflow contract: " + fragment);
     }
+  }
+
+  if (workflow.includes("inputs.build_number") ||
+      workflow.includes("      build_number:\n")) {
+    errors.push(
+      "Release build selection must be dynamic; manual build_number input is forbidden.");
   }
 
   const publishIndex = workflow.indexOf("\n  publish:");

@@ -38,6 +38,11 @@ function validContract() {
     "      PACKAGE_VERSION: ${{ needs.release-candidate.outputs.package-version }}",
     "      SOURCE_SHA: ${{ needs.release-candidate.outputs.source-sha }}",
     "    steps:",
+    "      - uses: actions/checkout@v7",
+    "        with:",
+    "          ref: ${{ needs.release-candidate.outputs.source-sha }}",
+    "          fetch-depth: 1",
+    "          persist-credentials: false",
     "      - run: |",
     "          sha256sum -c artifacts/nuget/SHA256SUMS.txt",
     '          url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/$PACKAGE_VERSION"',
@@ -97,6 +102,17 @@ test("requires certified checkout before publish setup-dotnet", () => {
   assert.match(
     validateFinalReleaseContract(contract).join("\n"),
     /checkout the certified source before setup-dotnet/i);
+});
+
+test("requires certified checkout before GitHub Release commands", () => {
+  const contract = validContract();
+  contract.workflow = contract.workflow.replace(
+    "      - uses: actions/checkout@v7\n        with:\n          ref: ${{ needs.release-candidate.outputs.source-sha }}\n          fetch-depth: 1\n          persist-credentials: false\n",
+    "");
+
+  assert.match(
+    validateFinalReleaseContract(contract).join("\n"),
+    /Finalization job must checkout the certified source/i);
 });
 
 test("rejects stale pre-release changelog language", () => {

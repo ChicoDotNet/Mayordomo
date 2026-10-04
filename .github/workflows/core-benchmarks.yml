@@ -39,17 +39,37 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Restore F# tooling
-        run: dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj
+      - name: Restore tooling and benchmark harness in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
 
-      - name: Build F# tooling
-        run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
+          dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj &
+          tooling_pid=$!
 
-      - name: Restore benchmark harness
-        run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
+          dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj &
+          benchmark_pid=$!
 
-      - name: Build benchmark harness
-        run: dotnet build benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj --configuration Release --no-restore
+          status=0
+          wait "$tooling_pid" || status=1
+          wait "$benchmark_pid" || status=1
+          exit "$status"
+
+      - name: Build tooling and benchmark harness in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj             --configuration Release             --no-restore &
+          tooling_pid=$!
+
+          dotnet build benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj             --configuration Release             --no-restore &
+          benchmark_pid=$!
+
+          status=0
+          wait "$tooling_pid" || status=1
+          wait "$benchmark_pid" || status=1
+          exit "$status"
 
       - name: Run reproducible benchmark suite
         shell: bash

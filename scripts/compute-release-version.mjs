@@ -26,7 +26,7 @@ function parseReleaseDate(value) {
   const dayOfYear = Math.floor((instant.getTime() - startOfYear) / 86_400_000) + 1;
   const fileDate = (year % 100) * 1000 + dayOfYear;
 
-  if (fileDate > 65_535) {
+  if (fileDate > 65535) {
     throw new RangeError("Encoded file-version date exceeds 65535.");
   }
 

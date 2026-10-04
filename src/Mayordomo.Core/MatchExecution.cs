@@ -87,12 +87,15 @@ public sealed class MatchState
     MatchId matchId,
     Revision revision,
     IEnumerable<ParticipantId> participants,
+    IEnumerable<KeyValuePair<ParticipantId, PositionId>> positions,
     TurnState? turn,
     RandomState randomState)
   {
     MatchId = matchId;
     Revision = revision;
     Participants = new ReadOnlyCollection<ParticipantId>([.. participants]);
+    Positions = new ReadOnlyDictionary<ParticipantId, PositionId>(
+      positions.ToDictionary(entry => entry.Key, entry => entry.Value));
     Turn = turn;
     RandomState = randomState;
   }
@@ -102,6 +105,8 @@ public sealed class MatchState
   public Revision Revision { get; }
 
   public IReadOnlyList<ParticipantId> Participants { get; }
+
+  public IReadOnlyDictionary<ParticipantId, PositionId> Positions { get; }
 
   public TurnState? Turn { get; }
 
@@ -119,6 +124,7 @@ public sealed class MatchState
     return new MatchState(
       matchId,
       Revision.Zero,
+      [],
       [],
       null,
       new RandomState(randomSeed));
@@ -138,6 +144,7 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants.Append(participantId),
+      Positions,
       Turn,
       RandomState);
   }
@@ -163,6 +170,7 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants,
+      Positions,
       new TurnState(participantId, phaseId),
       RandomState);
   }
@@ -187,6 +195,7 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants,
+      Positions,
       null,
       RandomState);
   }
@@ -219,7 +228,73 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants,
+      Positions,
       new TurnState(participantId, phaseId),
+      RandomState);
+  }
+
+  internal MatchState PlaceParticipant(
+    ParticipantId participantId,
+    PositionId positionId,
+    Revision revision)
+  {
+    if (!Participants.Contains(participantId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' is not part of match '{MatchId}'.");
+    }
+
+    if (Positions.ContainsKey(participantId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' already has a position.");
+    }
+
+    var positions = Positions.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    positions.Add(participantId, positionId);
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      positions,
+      Turn,
+      RandomState);
+  }
+
+  internal MatchState MoveParticipant(
+    ParticipantId participantId,
+    PositionId fromPositionId,
+    PositionId toPositionId,
+    Revision revision)
+  {
+    if (!Positions.TryGetValue(participantId, out var currentPosition))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' does not have a position.");
+    }
+
+    if (currentPosition != fromPositionId)
+    {
+      throw new InvalidOperationException(
+        $"Participant '{participantId}' is at '{currentPosition}', not '{fromPositionId}'.");
+    }
+
+    var positions = Positions.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    positions[participantId] = toPositionId;
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      positions,
+      Turn,
       RandomState);
   }
 
@@ -246,6 +321,7 @@ public sealed class MatchState
       MatchId,
       revision,
       Participants,
+      Positions,
       Turn,
       randomStateAfter);
   }
@@ -348,6 +424,74 @@ public static class MatchEngine
 
     return new MatchTransition(
       reduced,
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    PlaceParticipantCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new ParticipantPlacedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        command.PositionId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    MoveParticipantCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    if (!state.Positions.TryGetValue(
+          command.ParticipantId,
+          out var fromPositionId))
+    {
+      throw new InvalidOperationException(
+        $"Participant '{command.ParticipantId}' does not have a position.");
+    }
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new ParticipantMovedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.ParticipantId,
+        fromPositionId,
+        command.ToPositionId,
+        command.Distance)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
       new ReadOnlyCollection<MatchEvent>(events));
   }
 
@@ -599,6 +743,17 @@ public static class MatchEngine
       {
         ParticipantJoinedEvent joined =>
           current.AddParticipant(joined.ParticipantId, joined.Revision),
+        ParticipantPlacedEvent placed =>
+          current.PlaceParticipant(
+            placed.ParticipantId,
+            placed.PositionId,
+            placed.Revision),
+        ParticipantMovedEvent moved =>
+          current.MoveParticipant(
+            moved.ParticipantId,
+            moved.FromPositionId,
+            moved.ToPositionId,
+            moved.Revision),
         TurnStartedEvent started =>
           current.StartTurn(
             started.ParticipantId,

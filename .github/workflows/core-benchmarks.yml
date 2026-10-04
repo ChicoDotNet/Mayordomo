@@ -1,0 +1,62 @@
+name: Core Benchmarks
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'src/Mayordomo.Core/**'
+      - 'benchmarks/Mayordomo.Core.Benchmarks/**'
+      - 'global.json'
+      - '.github/workflows/core-benchmarks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      MAYORDOMO_BENCHMARK_ITERATIONS: '10000'
+      MAYORDOMO_BENCHMARK_WARMUP: '1000'
+      MAYORDOMO_BENCHMARK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore benchmark harness
+        run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
+
+      - name: Build benchmark harness
+        run: dotnet build benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run reproducible benchmark suite
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          dotnet run \
+            --project benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj \
+            --configuration Release \
+            --no-build \
+            > artifacts/core-benchmark.json
+
+          cat artifacts/core-benchmark.json
+
+          {
+            echo '## Mayordomo.Core benchmark'
+            echo
+            echo '```json'
+            cat artifacts/core-benchmark.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

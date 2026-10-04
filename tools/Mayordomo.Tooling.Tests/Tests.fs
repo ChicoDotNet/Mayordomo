@@ -233,13 +233,30 @@ jobs:
       package-version: ${{ steps.version.outputs.package_version }}
       source-sha: ${{ steps.version.outputs.source_sha }}
     steps:
-      - run: dotnet "$TOOLING_DLL" release-version 1 0 "$release_date" "$GITHUB_RUN_NUMBER" "$SOURCE_SHA"
-      - run: dotnet "$TOOLING_DLL" release-contract
-      - run: dotnet "$TOOLING_DLL" public-readiness
-      - run: dotnet "$TOOLING_DLL" engine-budget
-      - run: dotnet "$TOOLING_DLL" package-audit
-      - run: dotnet "$TOOLING_DLL" consumer-smoke
-      - run: dotnet "$TOOLING_DLL" benchmark-budget
+      - name: PR release status bridge
+        if: github.event_name == 'pull_request'
+        run: true
+      - name: Checkout exact candidate source
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Setup .NET SDK
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Restore F# CI tooling
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Build F# CI tooling
+        if: github.event_name == 'workflow_dispatch'
+        run: true
+      - name: Resolve deterministic 1.0 release identity
+        if: github.event_name == 'workflow_dispatch'
+        run: dotnet "$TOOLING_DLL" release-version 1 0 "$release_date" "$GITHUB_RUN_NUMBER" "$SOURCE_SHA"
+      - name: Verify final-release contract
+        if: github.event_name == 'workflow_dispatch'
+        run: dotnet "$TOOLING_DLL" release-contract
+      - name: Verify public repository readiness
+        if: github.event_name == 'workflow_dispatch'
+        run: dotnet "$TOOLING_DLL" public-readiness
       - name: Restore engine tests
         if: github.event_name == 'workflow_dispatch'
         run: true
@@ -248,7 +265,7 @@ jobs:
         run: true
       - name: Enforce engine footprint
         if: github.event_name == 'workflow_dispatch'
-        run: true
+        run: dotnet "$TOOLING_DLL" engine-budget
       - name: Test engine
         if: github.event_name == 'workflow_dispatch'
         run: true
@@ -260,10 +277,10 @@ jobs:
         run: true
       - name: Audit NuGet package contract
         if: github.event_name == 'workflow_dispatch'
-        run: true
+        run: dotnet "$TOOLING_DLL" package-audit
       - name: Smoke test installed package
         if: github.event_name == 'workflow_dispatch'
-        run: true
+        run: dotnet "$TOOLING_DLL" consumer-smoke
       - name: Restore benchmark harness
         if: github.event_name == 'workflow_dispatch'
         run: true
@@ -272,7 +289,7 @@ jobs:
         run: true
       - name: Run measured performance suite
         if: github.event_name == 'workflow_dispatch'
-        run: true
+        run: dotnet "$TOOLING_DLL" benchmark-budget
       - name: Upload certified release candidate
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
@@ -330,6 +347,16 @@ jobs:
           done
 """
 
+    let private validPolicy =
+        """
+env:
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+steps:
+  - run: dotnet "$TOOLING_DLL" release-version
+  - run: dotnet "$TOOLING_DLL" release-contract
+  - run: dotnet "$TOOLING_DLL" public-readiness
+"""
+
     let private changelog =
         """## 1.0 release train
 Mayordomo.Core uses Trusted Publishing.
@@ -342,6 +369,29 @@ same workflow run
 Do not dispatch a new publish run
 v{packageVersion}
 release-manifest.json"""
+
+    [<Fact>]
+    let accepts_repository_policy_release_validation_contract () =
+        Assert.Empty(
+            ReleaseContract.validatePrReleasePolicy
+                validPolicy)
+
+    [<Fact>]
+    let rejects_missing_release_contract_in_repository_policy () =
+        let policy =
+            validPolicy.Replace(
+                "  - run: dotnet \"$TOOLING_DLL\" release-contract\n",
+                "")
+
+        let errors =
+            ReleaseContract.validatePrReleasePolicy
+                policy
+
+        Assert.True(
+            errors
+            |> List.exists (fun error ->
+                error.Contains(
+                    "release-contract")))
 
     [<Fact>]
     let accepts_complete_fsharp_release_contract () =

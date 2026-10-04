@@ -54,24 +54,34 @@ jobs:
       # NuGet package caching is intentionally disabled here: CI-I03 measured slower candidate runs.
 
     steps:
+      - name: PR release status bridge
+        if: github.event_name == 'pull_request'
+        run: echo "Release identity, release contract, and public readiness are validated by Repository Policy."
+
       - name: Checkout exact candidate source
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v6
+      - name: Setup .NET SDK
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Restore F# CI tooling
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet restore tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj
 
       - name: Build F# CI tooling
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet build tools/Mayordomo.Tooling/Mayordomo.Tooling.fsproj --configuration Release --no-restore
 
       - name: Resolve deterministic 1.0 release identity
+        if: github.event_name == 'workflow_dispatch'
         id: version
         shell: bash
         run: |
@@ -130,22 +140,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify final-release contract
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet "$TOOLING_DLL" release-contract
 
       - name: Verify public repository readiness
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet "$TOOLING_DLL" public-readiness
-
-      - name: Summarize PR release validation
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          {
-            echo "## PR release validation"
-            echo
-            echo "Release identity, final-release contract, and public-readiness checks passed."
-            echo "The full immutable candidate is built only on workflow_dispatch."
-            echo ".NET CI owns build/test/package/smoke coverage; Core Benchmarks owns performance coverage for PRs."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore engine tests
         if: github.event_name == 'workflow_dispatch'

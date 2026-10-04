@@ -1370,6 +1370,7 @@ module ReleaseContract =
 
         let requiredWorkflowFragments =
             [
+                "PR release status bridge"
                 "\"$TOOLING_DLL\" release-version"
                 "\"$TOOLING_DLL\" release-contract"
                 "\"$TOOLING_DLL\" public-readiness"
@@ -1470,6 +1471,13 @@ module ReleaseContract =
 
             let dispatchOnlyCandidateSteps =
                 [
+                    "Checkout exact candidate source"
+                    "Setup .NET SDK"
+                    "Restore F# CI tooling"
+                    "Build F# CI tooling"
+                    "Resolve deterministic 1.0 release identity"
+                    "Verify final-release contract"
+                    "Verify public repository readiness"
                     "Restore engine tests"
                     "Build exact release assembly and engine tests"
                     "Enforce engine footprint"
@@ -1710,6 +1718,30 @@ module ReleaseContract =
 
         List.ofSeq errors
 
+    let validatePrReleasePolicy (policy: string) =
+        let errors = ResizeArray<string>()
+
+        let requiredFragments =
+            [
+                "SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
+                "\"$TOOLING_DLL\" release-version"
+                "\"$TOOLING_DLL\" release-contract"
+                "\"$TOOLING_DLL\" public-readiness"
+            ]
+
+        for fragment in requiredFragments do
+            if
+                not (
+                    policy.Contains(
+                        fragment,
+                        StringComparison.Ordinal)
+                )
+            then
+                errors.Add(
+                    $"Repository Policy is missing PR release validation contract: {fragment}")
+
+        List.ofSeq errors
+
     let run (_: string array) =
         let errors =
             validate
@@ -1719,6 +1751,9 @@ module ReleaseContract =
                     "CHANGELOG.md"))
                 (Internal.readText(
                     "docs/RELEASING.md"))
+            @ validatePrReleasePolicy
+                (Internal.readText(
+                    ".github/workflows/repository-policy.yml"))
 
         if errors.IsEmpty then
             Console.WriteLine(

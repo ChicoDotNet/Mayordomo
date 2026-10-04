@@ -540,13 +540,15 @@ jobs:
           test "$(jq -r '.prerelease' <<<"$release_json")" = "false"
 
           asset_names="$(jq -r '.assets[].name' <<<"$release_json")"
-          for expected in
+          required_assets=(
             "Mayordomo.Core.$PACKAGE_VERSION.nupkg"
             "Mayordomo.Core.$PACKAGE_VERSION.snupkg"
             "SHA256SUMS.txt"
             "core-benchmark.json"
-            "release-manifest.json";
-          do
+            "release-manifest.json"
+          )
+
+          for expected in "${required_assets[@]}"; do
             grep -Fx "$expected" <<<"$asset_names" >/dev/null
           done
 

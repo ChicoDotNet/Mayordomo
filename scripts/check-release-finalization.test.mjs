@@ -19,6 +19,14 @@ function validContract() {
     "    permissions:",
     "      contents: read",
     "      id-token: write",
+    "    steps:",
+    "      - uses: actions/checkout@v7",
+    "        with:",
+    "          ref: ${{ needs.release-candidate.outputs.source-sha }}",
+    "          persist-credentials: false",
+    "      - uses: actions/setup-dotnet@v6",
+    "        with:",
+    "          global-json-file: global.json",
     "  finalize-release:",
     "    if: github.event_name == 'workflow_dispatch' && inputs.publish",
     "    needs:",
@@ -78,6 +86,17 @@ test("rejects repository write permission in the OIDC publish job", () => {
   assert.match(
     validateFinalReleaseContract(contract).join("\n"),
     /publish job must not receive repository contents write/i);
+});
+
+test("requires certified checkout before publish setup-dotnet", () => {
+  const contract = validContract();
+  contract.workflow = contract.workflow.replace(
+    "      - uses: actions/checkout@v7\n        with:\n          ref: ${{ needs.release-candidate.outputs.source-sha }}\n          persist-credentials: false\n",
+    "");
+
+  assert.match(
+    validateFinalReleaseContract(contract).join("\n"),
+    /checkout the certified source before setup-dotnet/i);
 });
 
 test("rejects stale pre-release changelog language", () => {

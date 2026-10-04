@@ -57,6 +57,21 @@ export function validateFinalReleaseContract({ workflow, changelog, releasing })
       errors.push("NuGet publish job must not receive repository contents write permission.");
     }
 
+    const checkoutIndex = publishBlock.indexOf("uses: actions/checkout@v7");
+    const certifiedRefIndex = publishBlock.indexOf(
+      "ref: ${{ needs.release-candidate.outputs.source-sha }}");
+    const setupDotnetIndex = publishBlock.indexOf("uses: actions/setup-dotnet@v6");
+
+    if (checkoutIndex < 0 ||
+        certifiedRefIndex < 0 ||
+        setupDotnetIndex < 0 ||
+        checkoutIndex >= setupDotnetIndex ||
+        certifiedRefIndex >= setupDotnetIndex ||
+        !publishBlock.includes("persist-credentials: false")) {
+      errors.push(
+        "NuGet publish job must checkout the certified source before setup-dotnet.");
+    }
+
     if (!finalizeBlock.includes("contents: write")) {
       errors.push("Finalization job requires contents: write to create tag/release metadata.");
     }

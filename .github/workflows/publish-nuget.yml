@@ -1,0 +1,149 @@
+name: Publish Mayordomo.Core
+
+on:
+  workflow_dispatch:
+    inputs:
+      nuget_user:
+        description: "nuget.org profile name authorized by the trusted publishing policy"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish stable NuGet
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Verify release source is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Compute release identity
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_date="$(TZ=America/Mexico_City date +%Y%m%d)"
+          build_number="${GITHUB_RUN_NUMBER}"
+
+          if (( build_number < 1 || build_number > 65535 )); then
+            echo "GitHub run number must fit the .NET file-version component (1..65535)." >&2
+            exit 1
+          fi
+
+          version_json="$(node scripts/compute-release-version.mjs 1 0 "$release_date" "$build_number" "$GITHUB_SHA")"
+
+          package_version="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.packageVersion)' "$version_json")"
+          assembly_version="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.assemblyVersion)' "$version_json")"
+          file_version="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.fileVersion)' "$version_json")"
+          informational_version="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.informationalVersion)' "$version_json")"
+
+          {
+            echo "package_version=$package_version"
+            echo "assembly_version=$assembly_version"
+            echo "file_version=$file_version"
+            echo "informational_version=$informational_version"
+            echo "tag=v$package_version"
+          } >> "$GITHUB_OUTPUT"
+
+          printf '%s\n' "$version_json"
+
+      - name: Restore
+        run: dotnet restore Mayordomo.slnx
+
+      - name: Build
+        run: dotnet build Mayordomo.slnx --configuration Release --no-restore
+
+      - name: Enforce engine footprint
+        run: node scripts/check-engine-budget.mjs
+
+      - name: Test
+        run: dotnet test Mayordomo.slnx --configuration Release --no-build
+
+      - name: Pack exact release
+        shell: bash
+        run: >
+          dotnet pack src/Mayordomo.Core/Mayordomo.Core.csproj
+          --configuration Release
+          --output artifacts/nuget
+          -p:PackageVersion=${{ steps.version.outputs.package_version }}
+          -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
+          -p:FileVersion=${{ steps.version.outputs.file_version }}
+          -p:InformationalVersion=${{ steps.version.outputs.informational_version }}
+          -p:RepositoryCommit=${{ github.sha }}
+
+      - name: Verify package artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="artifacts/nuget/Mayordomo.Core.${{ steps.version.outputs.package_version }}.nupkg"
+          symbols="artifacts/nuget/Mayordomo.Core.${{ steps.version.outputs.package_version }}.snupkg"
+          test -f "$package"
+          test -f "$symbols"
+          sha256sum "$package" "$symbols" | tee artifacts/nuget/SHA256SUMS.txt
+
+      - name: Smoke test installed package
+        run: >
+          node scripts/test-package-consumer.mjs
+          artifacts/nuget
+          ${{ steps.version.outputs.package_version }}
+
+      - name: Ensure release version is unpublished
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/${{ steps.version.outputs.package_version }}/mayordomo.core.${{ steps.version.outputs.package_version }}.nupkg"
+          status="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "$url")"
+          if [[ "$status" != "404" ]]; then
+            echo "Expected unpublished NuGet version, received HTTP $status from $url" >&2
+            exit 1
+          fi
+
+      - name: NuGet login via OIDC
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ inputs.nuget_user }}
+
+      - name: Publish Mayordomo.Core
+        shell: bash
+        run: >
+          dotnet nuget push
+          artifacts/nuget/Mayordomo.Core.${{ steps.version.outputs.package_version }}.nupkg
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+
+      - name: Create immutable source tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.package_version }}"
+
+          git tag --annotate "$tag" "$GITHUB_SHA" --message "Mayordomo.Core $version"
+          git push origin "$tag"
+
+          gh release create "$tag"             artifacts/nuget/Mayordomo.Core."$version".nupkg             artifacts/nuget/Mayordomo.Core."$version".snupkg             artifacts/nuget/SHA256SUMS.txt             --title "Mayordomo.Core $version"             --notes "Stable Mayordomo.Core $version. Source SHA: $GITHUB_SHA"

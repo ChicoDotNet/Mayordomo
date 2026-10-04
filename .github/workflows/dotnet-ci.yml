@@ -16,6 +16,7 @@ on:
       - 'scripts/check-engine-budget.mjs'
       - 'scripts/compute-release-version*.mjs'
       - 'scripts/test-package-consumer.mjs'
+      - 'scripts/audit-nuget-package.mjs'
       - 'README.md'
       - '.github/workflows/dotnet-ci.yml'
   push:
@@ -88,6 +89,13 @@ jobs:
         run: |
           test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.nupkg
           test -f artifacts/nuget/Mayordomo.Core.1.0.20261004.999.snupkg
+
+      - name: Audit NuGet package contract
+        run: >
+          node scripts/audit-nuget-package.mjs
+          artifacts/nuget
+          1.0.20261004.999
+          "$GITHUB_SHA"
 
       - name: Smoke test installed package
         run: >

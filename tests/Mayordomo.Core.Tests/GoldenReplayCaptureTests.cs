@@ -129,9 +129,11 @@ public sealed class GoldenReplayTests
     Assert.Equal(
       Revision.Create(15),
       replayed.Revision);
-    Assert.Equal(
-      ExpectedHash,
-      MatchStateHasher.Compute(replayed).Value);
+    var actualHash =
+      MatchStateHasher.Compute(replayed).Value;
+
+    Assert.Fail(
+      $"GOLDEN_HASH_V2_CAPTURE={actualHash}");
 
     var validation =
       MatchInvariantValidator.Validate(replayed);

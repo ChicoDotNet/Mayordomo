@@ -258,6 +258,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      HeldItems,
       Decks,
       new TurnState(participantId, phaseId),
       RandomState);

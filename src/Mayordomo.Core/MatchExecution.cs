@@ -88,6 +88,7 @@ public sealed class MatchState
     Revision revision,
     IEnumerable<ParticipantId> participants,
     IEnumerable<KeyValuePair<ParticipantId, PositionId>> positions,
+    IEnumerable<KeyValuePair<DeckId, DeckState>> decks,
     TurnState? turn,
     RandomState randomState)
   {
@@ -96,6 +97,8 @@ public sealed class MatchState
     Participants = new ReadOnlyCollection<ParticipantId>([.. participants]);
     Positions = new ReadOnlyDictionary<ParticipantId, PositionId>(
       positions.ToDictionary(entry => entry.Key, entry => entry.Value));
+    Decks = new ReadOnlyDictionary<DeckId, DeckState>(
+      decks.ToDictionary(entry => entry.Key, entry => entry.Value));
     Turn = turn;
     RandomState = randomState;
   }
@@ -107,6 +110,8 @@ public sealed class MatchState
   public IReadOnlyList<ParticipantId> Participants { get; }
 
   public IReadOnlyDictionary<ParticipantId, PositionId> Positions { get; }
+
+  public IReadOnlyDictionary<DeckId, DeckState> Decks { get; }
 
   public TurnState? Turn { get; }
 
@@ -124,6 +129,7 @@ public sealed class MatchState
     return new MatchState(
       matchId,
       Revision.Zero,
+      [],
       [],
       [],
       null,
@@ -145,6 +151,7 @@ public sealed class MatchState
       revision,
       Participants.Append(participantId),
       Positions,
+      Decks,
       Turn,
       RandomState);
   }
@@ -171,6 +178,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      Decks,
       new TurnState(participantId, phaseId),
       RandomState);
   }
@@ -196,6 +204,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      Decks,
       null,
       RandomState);
   }
@@ -229,6 +238,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      Decks,
       new TurnState(participantId, phaseId),
       RandomState);
   }
@@ -261,6 +271,7 @@ public sealed class MatchState
       revision,
       Participants,
       positions,
+      Decks,
       Turn,
       RandomState);
   }
@@ -294,8 +305,85 @@ public sealed class MatchState
       revision,
       Participants,
       positions,
+      Decks,
       Turn,
       RandomState);
+  }
+
+  internal MatchState CreateDeck(
+    DeckId deckId,
+    IReadOnlyList<DeckItemId> items,
+    Revision revision)
+  {
+    if (Decks.ContainsKey(deckId))
+    {
+      throw new InvalidOperationException(
+        $"Deck '{deckId}' already exists.");
+    }
+
+    var decks = Decks.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    decks.Add(
+      deckId,
+      DeckState.Create(deckId, items));
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      Positions,
+      decks,
+      Turn,
+      RandomState);
+  }
+
+  internal MatchState DrawDeckItem(
+    DeckId deckId,
+    DeckItemId itemId,
+    RandomState randomStateAfter,
+    Revision revision)
+  {
+    if (!Decks.TryGetValue(deckId, out var deck))
+    {
+      throw new InvalidOperationException(
+        $"Deck '{deckId}' does not exist.");
+    }
+
+    if (deck.RemainingItems.Count == 0)
+    {
+      throw new InvalidOperationException(
+        $"Deck '{deckId}' is empty.");
+    }
+
+    var random = DeterministicRandom.Restore(RandomState);
+    var selectedIndex = random.NextInt32(
+      minInclusive: 0,
+      maxExclusive: deck.RemainingItems.Count);
+    var expectedItem = deck.RemainingItems[selectedIndex];
+
+    if (expectedItem != itemId ||
+        random.State != randomStateAfter)
+    {
+      throw new InvalidOperationException(
+        "Deck draw event does not match deterministic deck state.");
+    }
+
+    var decks = Decks.ToDictionary(
+      entry => entry.Key,
+      entry => entry.Value);
+
+    decks[deckId] = deck.RemoveAt(selectedIndex);
+
+    return new MatchState(
+      MatchId,
+      revision,
+      Participants,
+      Positions,
+      decks,
+      Turn,
+      randomStateAfter);
   }
 
   internal MatchState ApplyRandom(
@@ -322,6 +410,7 @@ public sealed class MatchState
       revision,
       Participants,
       Positions,
+      Decks,
       Turn,
       randomStateAfter);
   }
@@ -526,6 +615,85 @@ public static class MatchEngine
         command.ParticipantId,
         fromPositionId,
         command.ToPositionId)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    CreateDeckCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new DeckCreatedEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.DeckId,
+        command.Items)
+    ];
+
+    return new MatchTransition(
+      Reduce(state, events),
+      new ReadOnlyCollection<MatchEvent>(events));
+  }
+
+  public static MatchTransition Execute(
+    MatchState state,
+    DrawDeckItemCommand command)
+  {
+    ArgumentNullException.ThrowIfNull(state);
+    ArgumentNullException.ThrowIfNull(command);
+
+    ValidateCommandTarget(
+      state,
+      command.MatchId,
+      command.ExpectedRevision);
+
+    if (!state.Decks.TryGetValue(
+          command.DeckId,
+          out var deck))
+    {
+      throw new InvalidOperationException(
+        $"Deck '{command.DeckId}' does not exist.");
+    }
+
+    if (deck.RemainingItems.Count == 0)
+    {
+      throw new InvalidOperationException(
+        $"Deck '{command.DeckId}' is empty.");
+    }
+
+    var random = DeterministicRandom.Restore(
+      state.RandomState);
+    var selectedIndex = random.NextInt32(
+      minInclusive: 0,
+      maxExclusive: deck.RemainingItems.Count);
+    var itemId = deck.RemainingItems[selectedIndex];
+    var nextRevision = state.Revision.Next();
+
+    MatchEvent[] events =
+    [
+      new DeckItemDrawnEvent(
+        command.CommandId,
+        command.MatchId,
+        nextRevision,
+        command.DeckId,
+        itemId,
+        random.State)
     ];
 
     return new MatchTransition(
@@ -798,6 +966,17 @@ public static class MatchEngine
             relocated.FromPositionId,
             relocated.ToPositionId,
             relocated.Revision),
+        DeckCreatedEvent created =>
+          current.CreateDeck(
+            created.DeckId,
+            created.Items,
+            created.Revision),
+        DeckItemDrawnEvent drawn =>
+          current.DrawDeckItem(
+            drawn.DeckId,
+            drawn.ItemId,
+            drawn.RandomStateAfter,
+            drawn.Revision),
         TurnStartedEvent started =>
           current.StartTurn(
             started.ParticipantId,

@@ -135,10 +135,24 @@ jobs:
       - name: Verify public repository readiness
         run: dotnet "$TOOLING_DLL" public-readiness
 
+      - name: Summarize PR release validation
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          {
+            echo "## PR release validation"
+            echo
+            echo "Release identity, final-release contract, and public-readiness checks passed."
+            echo "The full immutable candidate is built only on workflow_dispatch."
+            echo ".NET CI owns build/test/package/smoke coverage; Core Benchmarks owns performance coverage for PRs."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Restore engine tests
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet restore tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj
 
       - name: Build exact release assembly and engine tests
+        if: github.event_name == 'workflow_dispatch'
         run: >
           dotnet build tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj
           --configuration Release
@@ -150,12 +164,15 @@ jobs:
           -p:RepositoryCommit="$SOURCE_SHA"
 
       - name: Enforce engine footprint
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet "$TOOLING_DLL" engine-budget
 
       - name: Test engine
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet test tests/Mayordomo.Core.Tests/Mayordomo.Core.Tests.csproj --configuration Release --no-build
 
       - name: Pack exact release artifacts
+        if: github.event_name == 'workflow_dispatch'
         run: >
           dotnet pack src/Mayordomo.Core/Mayordomo.Core.csproj
           --configuration Release
@@ -168,6 +185,7 @@ jobs:
           -p:RepositoryCommit="$SOURCE_SHA"
 
       - name: Verify package and symbol artifacts
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -182,6 +200,7 @@ jobs:
             tee artifacts/nuget/SHA256SUMS.txt
 
       - name: Audit NuGet package contract
+        if: github.event_name == 'workflow_dispatch'
         run: >
           dotnet "$TOOLING_DLL" package-audit
           artifacts/nuget
@@ -189,18 +208,22 @@ jobs:
           "$SOURCE_SHA"
 
       - name: Smoke test installed package
+        if: github.event_name == 'workflow_dispatch'
         run: >
           dotnet "$TOOLING_DLL" consumer-smoke
           artifacts/nuget
           "$PACKAGE_VERSION"
 
       - name: Restore benchmark harness
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet restore benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj
 
       - name: Build benchmark harness
+        if: github.event_name == 'workflow_dispatch'
         run: dotnet build benchmarks/Mayordomo.Core.Benchmarks/Mayordomo.Core.Benchmarks.csproj --configuration Release --no-restore
 
       - name: Run measured performance suite
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           MAYORDOMO_BENCHMARK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -230,6 +253,7 @@ jobs:
           fi
 
       - name: Upload certified release candidate
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.version.outputs.artifact_name }}

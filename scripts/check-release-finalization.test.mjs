@@ -15,6 +15,11 @@ function validContract() {
     "      artifact-name: ${{ steps.version.outputs.artifact_name }}",
     "      source-sha: ${{ steps.version.outputs.source_sha }}",
     '    echo "source_sha=$SOURCE_SHA"',
+    '    versions_url="https://api.nuget.org/v3-flatcontainer/mayordomo.core/index.json"',
+    '    latest_build="$(',
+    '    next_published_build="$((latest_build + 1))"',
+    '    if (( build_number < next_published_build )); then',
+    '    for attempt in {1..180}; do',
     "  publish:",
     "    permissions:",
     "      contents: read",
@@ -114,6 +119,17 @@ test("requires certified checkout before GitHub Release commands", () => {
   assert.match(
     validateFinalReleaseContract(contract).join("\n"),
     /Finalization job must checkout the certified source/i);
+});
+
+test("rejects manual build_number release overrides", () => {
+  const contract = validContract();
+  contract.workflow = contract.workflow.replace(
+    "jobs:",
+    "on:\n  workflow_dispatch:\n    inputs:\n      build_number:\n        type: string\n\njobs:");
+
+  assert.match(
+    validateFinalReleaseContract(contract).join("\n"),
+    /manual build_number input is forbidden/i);
 });
 
 test("rejects stale pre-release changelog language", () => {
